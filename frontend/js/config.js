@@ -2,7 +2,7 @@
 // Change this to your Render.com backend URL after deployment
 const API_BASE_URL = window.location.hostname === 'localhost' 
     ? '' 
-    : 'https://your-app-name.onrender.com';
+    : 'https://jobguard-ai-api.onrender.com';
 
 /**
  * Make API request with base URL
