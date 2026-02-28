@@ -1,0 +1,14 @@
+[build]
+  command = "echo 'No build needed - static site'"
+  publish = "frontend"
+  ignore = "requirements.txt"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    X-XSS-Protection = "1; mode=block"
