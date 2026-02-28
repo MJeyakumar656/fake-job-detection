@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How It Works - JobGuard AI</title>
+    <meta name="description"
+        content="Learn how JobGuard AI detects fake job postings using deep learning, NLP feature extraction, and red flag analysis.">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">
+                <i class="fas fa-shield-alt"></i>
+                <span>JobGuard AI</span>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="/" class="nav-link">Home</a></li>
+                <li><a href="/#features" class="nav-link">Features</a></li>
+                <li><a href="/how-it-works" class="nav-link active">How it Works</a></li>
+                <li><a href="/about" class="nav-link">About</a></li>
+            </ul>
+            <div class="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <section class="hiw-hero">
+        <div class="container">
+            <span class="badge">How It Works</span>
+            <h1>AI-Powered Job Verification</h1>
+            <p>Our system combines deep learning with rule-based analysis to provide comprehensive fake job detection in
+                seconds.</p>
+        </div>
+    </section>
+
+    <!-- Pipeline Steps -->
+    <section class="pipeline-section">
+        <div class="container">
+            <h2>Detection Pipeline</h2>
+            <p class="section-subtitle">From input to verdict — here's what happens behind the scenes</p>
+
+            <div class="pipeline">
+                <!-- Step 1 -->
+                <div class="pipeline-step">
+                    <div class="pipeline-icon">
+                        <div class="step-circle">1</div>
+                    </div>
+                    <div class="pipeline-content">
+                        <h3><i class="fas fa-paste"></i> Submit Job Posting</h3>
+                        <p>Paste a job URL from LinkedIn, Naukri, Indeed, or Internshala — or paste the full job
+                            description text directly.</p>
+                        <div class="pipeline-detail">
+                            <div class="detail-chip"><i class="fab fa-linkedin"></i> LinkedIn</div>
+                            <div class="detail-chip"><i class="fas fa-briefcase"></i> Naukri</div>
+                            <div class="detail-chip"><i class="fas fa-briefcase"></i> Indeed</div>
+                            <div class="detail-chip"><i class="fas fa-graduation-cap"></i> Internshala</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="pipeline-step">
+                    <div class="pipeline-icon">
+                        <div class="step-circle">2</div>
+                    </div>
+                    <div class="pipeline-content">
+                        <h3><i class="fas fa-spider"></i> Data Extraction</h3>
+                        <p>If a URL is provided, our web scraper automatically extracts job title, company name,
+                            location, salary, requirements, and description from the portal page.</p>
+                        <div class="pipeline-detail">
+                            <div class="detail-chip">Job Title</div>
+                            <div class="detail-chip">Company</div>
+                            <div class="detail-chip">Location</div>
+                            <div class="detail-chip">Salary</div>
+                            <div class="detail-chip">Requirements</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="pipeline-step">
+                    <div class="pipeline-icon">
+                        <div class="step-circle">3</div>
+                    </div>
+                    <div class="pipeline-content">
+                        <h3><i class="fas fa-cogs"></i> Feature Engineering</h3>
+                        <p>The system extracts <strong>14 engineered features</strong> from the text, measuring
+                            linguistic quality, professionalism, and suspicious patterns.</p>
+                        <div class="features-breakdown">
+                            <div class="feature-row">
+                                <span class="feature-name">Text Length & Word Count</span>
+                                <span class="feature-desc">Short descriptions are suspicious</span>
+                            </div>
+                            <div class="feature-row">
+                                <span class="feature-name">Spelling & Grammar Score</span>
+                                <span class="feature-desc">Fake jobs have more errors</span>
+                            </div>
+                            <div class="feature-row">
+                                <span class="feature-name">Readability (Flesch-Kincaid)</span>
+                                <span class="feature-desc">Professional writing has consistent readability</span>
+                            </div>
+                            <div class="feature-row">
+                                <span class="feature-name">Sentiment Analysis</span>
+                                <span class="feature-desc">Overly positive language is a red flag</span>
+                            </div>
+                            <div class="feature-row">
+                                <span class="feature-name">Lexical Diversity</span>
+                                <span class="feature-desc">Repetitive text signals low effort</span>
+                            </div>
+                            <div class="feature-row">
+                                <span class="feature-name">Domain & Company Verification</span>
+                                <span class="feature-desc">Checks company website legitimacy</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 4 -->
+                <div class="pipeline-step">
+                    <div class="pipeline-icon">
+                        <div class="step-circle">4</div>
+                    </div>
+                    <div class="pipeline-content">
+                        <h3><i class="fas fa-brain"></i> AI Model Prediction</h3>
+                        <p>Features are fed into a <strong>Deep Neural Network</strong> (4 hidden layers, 439K
+                            parameters) along with TF-IDF text vectors. The model outputs a fake probability score from
+                            0 to 1.</p>
+                        <div class="pipeline-detail">
+                            <div class="detail-chip">500 TF-IDF Features</div>
+                            <div class="detail-chip">14 Engineered Features</div>
+                            <div class="detail-chip">514 Total Inputs</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 5 -->
+                <div class="pipeline-step">
+                    <div class="pipeline-icon">
+                        <div class="step-circle">5</div>
+                    </div>
+                    <div class="pipeline-content">
+                        <h3><i class="fas fa-flag"></i> Red Flag Detection</h3>
+                        <p>A parallel rule-based engine scans for <strong>14+ specific red flag patterns</strong> that
+                            are commonly found in fraudulent job postings.</p>
+                        <div class="red-flags-grid">
+                            <div class="rf-item"><i class="fas fa-exclamation-circle"></i> Urgency language</div>
+                            <div class="rf-item"><i class="fas fa-exclamation-circle"></i> Money requests</div>
+                            <div class="rf-item"><i class="fas fa-exclamation-circle"></i> Free email domains</div>
+                            <div class="rf-item"><i class="fas fa-exclamation-circle"></i> Vague descriptions</div>
+                            <div class="rf-item"><i class="fas fa-exclamation-circle"></i> No experience needed</div>
+                            <div class="rf-item"><i class="fas fa-exclamation-circle"></i> Unrealistic salary</div>
+                            <div class="rf-item"><i class="fas fa-exclamation-circle"></i> Personal info requests</div>
+                            <div class="rf-item"><i class="fas fa-exclamation-circle"></i> Suspicious URLs</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 6 -->
+                <div class="pipeline-step">
+                    <div class="pipeline-icon">
+                        <div class="step-circle">6</div>
+                    </div>
+                    <div class="pipeline-content">
+                        <h3><i class="fas fa-chart-pie"></i> Combined Verdict</h3>
+                        <p>The AI prediction score and red flag analysis are combined to produce a final confidence
+                            score with a severity level — helping you make an informed decision.</p>
+                        <div class="verdict-levels">
+                            <div class="verdict-level safe">
+                                <span class="verdict-range">0-30%</span>
+                                <span class="verdict-label">Low Risk — Likely Safe</span>
+                            </div>
+                            <div class="verdict-level moderate">
+                                <span class="verdict-range">31-60%</span>
+                                <span class="verdict-label">Moderate — Proceed with Caution</span>
+                            </div>
+                            <div class="verdict-level high">
+                                <span class="verdict-range">61-85%</span>
+                                <span class="verdict-label">High Risk — Likely Fake</span>
+                            </div>
+                            <div class="verdict-level critical">
+                                <span class="verdict-range">86-100%</span>
+                                <span class="verdict-label">Critical — Almost Certainly Fake</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <div class="container">
+            <h2>Ready to Check a Job Posting?</h2>
+            <p>Try our AI-powered analyzer now — it takes just seconds.</p>
+            <a href="/#analyzer" class="btn btn-primary btn-large">
+                <i class="fas fa-shield-alt"></i> Analyze a Job Now
+            </a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>JobGuard AI</h4>
+                    <p>Protect yourself from job scams with AI-powered detection</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <ul>
+                        <li><a href="/">Home</a></li>
+                        <li><a href="/#features">Features</a></li>
+                        <li><a href="/how-it-works">How it Works</a></li>
+                        <li><a href="/about">About</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Legal</h4>
+                    <ul>
+                        <li><a href="#">Privacy Policy</a></li>
+                        <li><a href="#">Terms of Service</a></li>
+                        <li><a href="#">Contact Us</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 JobGuard AI. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Mobile menu toggle
+        const hamburger = document.querySelector('.hamburger');
+        const navMenu = document.querySelector('.nav-menu');
+        if (hamburger) {
+            hamburger.addEventListener('click', () => {
+                hamburger.classList.toggle('active');
+                navMenu.classList.toggle('active');
+            });
+        }
+    </script>
+</body>
+
+</html>

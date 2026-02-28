@@ -31,7 +31,7 @@ class FakeJobDetector:
     
     def prepare_training_data(self, df):
         """Prepare data for training"""
-        print("🔄 Preparing training data...")
+        print("[INFO] Preparing training data...")
         
         X_text = []
         X_features = []
@@ -75,7 +75,7 @@ class FakeJobDetector:
                 print(f"  ✓ Processed {idx + 1} records")
         
         # Vectorize text using TF-IDF
-        print("📊 Vectorizing text with TF-IDF...")
+        print("[INFO] Vectorizing text with TF-IDF...")
         X_tfidf = self.tfidf_vectorizer.fit_transform(X_text).toarray()
         
         # Combine TF-IDF with engineered features
@@ -89,7 +89,7 @@ class FakeJobDetector:
     
     def build_model(self, input_dim):
         """Build deep learning model"""
-        print("🏗️ Building neural network...")
+        print("[INFO] Building neural network...")
         
         self.model = Sequential([
             layers.Input(shape=(input_dim,)),
@@ -128,7 +128,7 @@ class FakeJobDetector:
     
     def train(self, X_train, y_train, X_val, y_val, epochs=50, batch_size=32):
         """Train the model"""
-        print("\n🚀 Training model...")
+        print("\n[INFO] Training model...")
         
         callbacks = [
             EarlyStopping(
@@ -158,23 +158,23 @@ class FakeJobDetector:
     
     def save_model(self):
         """Save trained model and preprocessors"""
-        print("💾 Saving model...")
+        print("[INFO] Saving model...")
         
         self.model.save(str(self.model_path / 'fake_job_detector.h5'))
         joblib.dump(self.tfidf_vectorizer, str(self.model_path / 'tfidf_vectorizer.pkl'))
         joblib.dump(self.scaler, str(self.model_path / 'scaler.pkl'))
         
-        print(f"✅ Model saved to {self.model_path}")
+        print(f"[OK] Model saved to {self.model_path}")
     
     def load_model(self):
         """Load trained model and preprocessors"""
-        print("📂 Loading model...")
+        print("[INFO] Loading model...")
         
         self.model = keras.models.load_model(str(self.model_path / 'fake_job_detector.h5'))
         self.tfidf_vectorizer = joblib.load(str(self.model_path / 'tfidf_vectorizer.pkl'))
         self.scaler = joblib.load(str(self.model_path / 'scaler.pkl'))
         
-        print("✅ Model loaded successfully")
+        print("[OK] Model loaded successfully")
     
     def predict(self, job_data):
         """Predict if job is fake"""

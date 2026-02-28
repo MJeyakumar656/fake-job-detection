@@ -5,7 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fake Job Detection - AI Powered</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <meta name="description"
+        content="Detect fake job postings with AI-powered deep learning. Protect yourself from job scams on LinkedIn, Naukri, Indeed, and Internshala.">
+    <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 
@@ -20,8 +22,8 @@
             <ul class="nav-menu">
                 <li><a href="#home" class="nav-link">Home</a></li>
                 <li><a href="#features" class="nav-link">Features</a></li>
-                <li><a href="#how-it-works" class="nav-link">How it Works</a></li>
-                <li><a href="/about" class="nav-link">About</a></li>
+                <li><a href="how_it_works.html" class="nav-link">How it Works</a></li>
+                <li><a href="about.html" class="nav-link">About</a></li>
             </ul>
             <div class="hamburger">
                 <span></span>
@@ -53,49 +55,32 @@
         <h2>Key Features</h2>
         <div class="features-grid">
             <div class="feature-card">
-                <div class="feature-icon">
-                    <i class="fas fa-robot"></i>
-                </div>
+                <div class="feature-icon"><i class="fas fa-robot"></i></div>
                 <h3>AI-Powered Detection</h3>
                 <p>Deep learning model trained on thousands of real and fake job postings</p>
             </div>
-
             <div class="feature-card">
-                <div class="feature-icon">
-                    <i class="fas fa-globe"></i>
-                </div>
+                <div class="feature-icon"><i class="fas fa-globe"></i></div>
                 <h3>Multi-Portal Support</h3>
                 <p>LinkedIn, Naukri, Indeed, Internshala</p>
             </div>
-
             <div class="feature-card">
-                <div class="feature-icon">
-                    <i class="fas fa-flag"></i>
-                </div>
+                <div class="feature-icon"><i class="fas fa-flag"></i></div>
                 <h3>Red Flags Detection</h3>
                 <p>Identifies 14+ different red flags in job descriptions</p>
             </div>
-
             <div class="feature-card">
-                <div class="feature-icon">
-                    <i class="fas fa-tachometer-alt"></i>
-                </div>
+                <div class="feature-icon"><i class="fas fa-tachometer-alt"></i></div>
                 <h3>Instant Results</h3>
                 <p>Get analysis results in seconds with confidence scores</p>
             </div>
-
             <div class="feature-card">
-                <div class="feature-icon">
-                    <i class="fas fa-lock"></i>
-                </div>
+                <div class="feature-icon"><i class="fas fa-lock"></i></div>
                 <h3>Privacy Protected</h3>
                 <p>Your data is processed securely and never stored</p>
             </div>
-
             <div class="feature-card">
-                <div class="feature-icon">
-                    <i class="fas fa-chart-line"></i>
-                </div>
+                <div class="feature-icon"><i class="fas fa-chart-line"></i></div>
                 <h3>Detailed Analysis</h3>
                 <p>Get comprehensive reports with severity levels</p>
             </div>
@@ -185,31 +170,26 @@
                     <h3>Submit Job URL or Text</h3>
                     <p>Paste a job posting URL from any supported portal or job description text</p>
                 </div>
-
                 <div class="step-card">
                     <div class="step-number">2</div>
                     <h3>Data Extraction</h3>
                     <p>System extracts and processes all job details automatically</p>
                 </div>
-
                 <div class="step-card">
                     <div class="step-number">3</div>
                     <h3>AI Analysis</h3>
                     <p>Deep learning model analyzes the job posting for suspicious patterns</p>
                 </div>
-
                 <div class="step-card">
                     <div class="step-number">4</div>
                     <h3>Red Flags Detection</h3>
                     <p>System identifies specific red flags and severity levels</p>
                 </div>
-
                 <div class="step-card">
                     <div class="step-number">5</div>
                     <h3>Get Results</h3>
                     <p>Receive detailed report with confidence score and recommendations</p>
                 </div>
-
                 <div class="step-card">
                     <div class="step-number">6</div>
                     <h3>Check Another Job</h3>
@@ -254,7 +234,8 @@
                     <ul>
                         <li><a href="#home">Home</a></li>
                         <li><a href="#features">Features</a></li>
-                        <li><a href="#how-it-works">How it Works</a></li>
+                        <li><a href="how_it_works.html">How it Works</a></li>
+                        <li><a href="about.html">About</a></li>
                     </ul>
                 </div>
                 <div class="footer-section">
@@ -271,8 +252,9 @@
             </div>
         </div>
     </footer>
-    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/script.js"></script>
 </body>
 
 </html>

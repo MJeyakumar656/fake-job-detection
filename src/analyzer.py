@@ -24,15 +24,15 @@ class JobAnalyzer:
         try:
             self.detector.load_model()
             self.model_loaded = True
-            print("✅ AI Model loaded successfully")
+            print("[OK] AI Model loaded successfully")
         except Exception as e:
-            print(f"⚠️ Model not found: {str(e)}")
-            print("⚠️ Running in demo mode without trained model")
+            print(f"[WARN] Model not found: {str(e)}")
+            print("[WARN] Running in demo mode without trained model")
             self.model_loaded = False
     
     def analyze_from_url(self, url):
         """Analyze job from URL"""
-        print(f"\n📝 Analyzing job from URL: {url}")
+        print(f"\n[INFO] Analyzing job from URL: {url}")
         
         try:
             # Step 1: Scrape job data
@@ -48,7 +48,7 @@ class JobAnalyzer:
             print("[3/3] Generating quality assessment...")
             analysis_result['job_quality'] = self._assess_job_quality(analysis_result, features)
             
-            print("✅ Analysis completed")
+            print("[OK] Analysis completed")
             return analysis_result
             
         except Exception as e:
@@ -59,7 +59,7 @@ class JobAnalyzer:
     
     def analyze_from_text(self, job_description_text):
         """Analyze job from pasted text"""
-        print(f"\n📝 Analyzing job from pasted text")
+        print(f"\n[INFO] Analyzing job from pasted text")
         
         try:
             # Parse job description text to extract structured data
@@ -75,7 +75,7 @@ class JobAnalyzer:
             print("[3/3] Generating quality assessment...")
             analysis_result['job_quality'] = self._assess_job_quality(analysis_result, features)
             
-            print("✅ Analysis completed")
+            print("[OK] Analysis completed")
             return analysis_result
             
         except Exception as e:

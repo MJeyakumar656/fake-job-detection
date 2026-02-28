@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, session
 from src.analyzer import JobAnalyzer
 import logging
 from functools import wraps
+from markupsafe import escape
 
 # Setup logging
 logging.basicConfig(
