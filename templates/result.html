@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis Result - JobGuard AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">
+                <i class="fas fa-shield-alt"></i>
+                <span>JobGuard AI</span>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="/" class="nav-link">Home</a></li>
+                <li><a href="/#features" class="nav-link">Features</a></li>
+                <li><a href="/#how-it-works" class="nav-link">How it Works</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container result-container">
+        <!-- Prediction Badge -->
+        <div class="prediction-badge" id="predictionBadge">
+            <div class="badge-icon">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="badge-text">
+                <h1 id="predictionText">FAKE JOB</h1>
+                <p id="predictionDescription">This job posting shows signs of being fraudulent</p>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="result-content">
+            <!-- Job Details Grid -->
+            <section class="section">
+                <h2>Job Details</h2>
+                <div class="result-grid">
+                    <div class="result-item">
+                        <label>📱 Job Portal</label>
+                        <div class="value" id="jobPortal">LinkedIn</div>
+                    </div>
+                    <div class="result-item">
+                        <label>🏢 Company Name</label>
+                        <div class="value" id="companyName">Unknown</div>
+                    </div>
+                    <div class="result-item">
+                        <label>🌐 Company Domain</label>
+                        <div class="value" id="companyDomain">N/A</div>
+                    </div>
+                    <div class="result-item">
+                        <label>💼 Job Title</label>
+                        <div class="value" id="jobTitle">Unknown</div>
+                    </div>
+                    <div class="result-item">
+                        <label>📍 Location</label>
+                        <div class="value" id="jobLocation">Not Specified</div>
+                    </div>
+                    <div class="result-item">
+                        <label>⭐ Job Quality</label>
+                        <div class="quality-display">
+                            <div class="quality-badge" id="qualityBadge">High</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Confidence Score Section -->
+            <section class="section">
+                <h2>📈 Model Confidence Score</h2>
+                <div class="confidence-section">
+                    <div class="confidence-display">
+                        <div class="confidence-percentage" id="confidencePercentage">85%</div>
+                        <p>Confidence Score</p>
+                    </div>
+                    <div class="progress-bar-large">
+                        <div class="progress-fill" id="confidenceFill" style="width: 85%"></div>
+                    </div>
+                    <p class="confidence-description">
+                        <strong>How to interpret this score:</strong><br>
+                        • <strong>0-30%:</strong> Low confidence - This job posting appears to have minimal red flags, but we recommend still verifying independently.<br>
+                        • <strong>31-60%:</strong> Moderate confidence - Some suspicious elements detected. Proceed with caution.<br>
+                        • <strong>61-85%:</strong> High confidence - Multiple red flags identified. We recommend avoiding this posting.<br>
+                        • <strong>86-100%:</strong> Very high confidence - Strong indicators of a fake job. Do not proceed.
+                    </p>
+                </div>
+            </section>
+
+            <!-- Red Flags Section -->
+            <section class="section">
+                <h2>🚩 Red Flags Detected</h2>
+                <div class="red-flags-section">
+                    <div class="red-flags-summary">
+                        <div class="red-flags-count" id="redFlagCount">3</div>
+                        <div class="red-flags-info">
+                            <p class="red-flags-label">Red Flags Found</p>
+                            <p class="severity-level">Severity: <strong id="severityLevel">High</strong></p>
+                        </div>
+                    </div>
+
+                    <!-- Red Flags List -->
+                    <div class="red-flags-list" id="redFlagsList">
+                        <div class="red-flag-item">
+                            <i class="fas fa-times-circle"></i>
+                            <span>Suspicious email domain</span>
+                        </div>
+                        <div class="red-flag-item">
+                            <i class="fas fa-times-circle"></i>
+                            <span>Vague job description</span>
+                        </div>
+                        <div class="red-flag-item">
+                            <i class="fas fa-times-circle"></i>
+                            <span>Unrealistic salary promise</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Description Preview Section -->
+            <section class="section">
+                <h2>📄 Description Preview</h2>
+                <div class="description-section">
+                    <div class="description-text" id="descriptionPreview">
+                        No description available
+                    </div>
+                </div>
+            </section>
+
+            <!-- Recommendations Section -->
+            <section class="section">
+                <h2>💡 Recommendations</h2>
+                <div class="recommendations">
+                    <div class="recommendation-item" id="recommendationList">
+                        <p>Loading recommendations...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Action Buttons -->
+            <section class="section action-buttons">
+                <button class="btn btn-primary btn-large" onclick="location.href='/'">
+                    <i class="fas fa-redo"></i> Check Another Job
+                </button>
+                <button class="btn btn-secondary btn-large" onclick="downloadReport()">
+                    <i class="fas fa-download"></i> Download Report
+                </button>
+                <button class="btn btn-secondary btn-large" onclick="shareResult()">
+                    <i class="fas fa-share-alt"></i> Share Result
+                </button>
+            </section>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; 2026 JobGuard AI. All rights reserved.</p>
+        </div>
+    </footer>
+<script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+<script src="{{ url_for('static', filename='js/result.js') }}"></script>
+</body>
+</html>
