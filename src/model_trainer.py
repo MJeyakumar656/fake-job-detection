@@ -3,11 +3,16 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.feature_extraction.text import TfidfVectorizer
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+try:
+    import tensorflow as tf
+    from tensorflow import keras
+    from tensorflow.keras import layers
+    from tensorflow.keras.models import Sequential
+    from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+    TF_AVAILABLE = True
+except ImportError:
+    TF_AVAILABLE = False
+    print("[WARN] TensorFlow not available - running in demo mode")
 import joblib
 from pathlib import Path
 from src.feature_extractor import FeatureExtractor
