@@ -356,287 +356,83 @@ class LinkedInScraper(BaseScraper):
             raise Exception(f"Failed to extract LinkedIn job data: {str(e)}")
     
     def _get_description(self, driver):
-        """Extract job description"""
+        """Extract job description from LinkedIn posting (generic - works for any job)"""
         try:
-            # Wait longer for page to fully load
-            time.sleep(8)
+            # Give page time to fully render
+            time.sleep(5)
 
-            # Scroll down to ensure content is loaded
-            driver.execute_script("window.scrollTo(0, document.body.scrollHeight / 4);")
-            time.sleep(3)
-            driver.execute_script("window.scrollTo(0, document.body.scrollHeight / 3);")
-            time.sleep(3)
+            # Scroll to load lazy content
             driver.execute_script("window.scrollTo(0, document.body.scrollHeight / 2);")
-            time.sleep(3)
+            time.sleep(2)
 
-            # Get job title and company for validation
-            job_title = ""
-            company_name = ""
+            # Try clicking 'Show more' to expand the full description
             try:
-                title_elem = driver.find_element(By.CSS_SELECTOR, "h1.top-card-layout__title")
-                job_title = title_elem.text.lower()
+                show_more = driver.find_element(By.CSS_SELECTOR, "button.show-more-less-html__button--more")
+                driver.execute_script("arguments[0].click();", show_more)
+                time.sleep(2)
             except:
-                pass
-            try:
-                company_elem = driver.find_element(By.CSS_SELECTOR, "a.topcard__org-name-link")
-                company_name = company_elem.text.lower()
-            except:
-                pass
-
-            # Define job_keywords here to ensure it's always available
-            job_keywords = []
-            if job_title:
-                job_keywords.extend(job_title.split())
-            if company_name:
-                job_keywords.extend(company_name.split())
-
-            # Try to expand "Show more" buttons for description
-            try:
-                # First, try to find and click the specific "Show more" button for job descriptions
-                show_more_buttons = driver.find_elements(By.CSS_SELECTOR, "button.show-more-less-html__button--more")
-                for button in show_more_buttons:
-                    if button.is_displayed() and "show more" in button.text.lower():
-                        print(f"Found and clicking 'Show more' button: {button.text}")
-                        try:
-                            # Try JavaScript click first
-                            driver.execute_script("arguments[0].click();", button)
-                            time.sleep(4)
-                            print("✅ Successfully clicked 'Show more' button with JavaScript")
-                            break
-                        except Exception as js_e:
-                            print(f"JavaScript click failed: {str(js_e)}, trying regular click")
-                            try:
-                                button.click()
-                                time.sleep(4)
-                                print("✅ Successfully clicked 'Show more' button with regular click")
-                                break
-                            except Exception as click_e:
-                                print(f"Regular click also failed: {str(click_e)}")
-
-                # If the specific button didn't work, try broader selectors
-                if not show_more_buttons:
-                    show_more_selectors = [
-                        "button[aria-label*='Click to see more description']",
-                        "button[data-test-id*='show-more']",
-                        "button.show-more-less-html__button",
-                        "button[data-test-id='show-more-less-button']",
-                        "button[aria-expanded='false']",
-                        "button[data-test-id='job-details-show-more-button']",
-                        "button.show-more-less__button",
-                        "button[data-test-id='show-more-less-button']",
-                        "button.ember-view",
-                        "button[data-test-id='show-more-less-html__button']",
-                        "button.show-more-less-html__button--visible",
-                        "button.show-more-less-button"
-                    ]
-                    for selector in show_more_selectors:
-                        try:
-                            buttons = driver.find_elements(By.CSS_SELECTOR, selector)
-                            for button in buttons:
-                                if button.is_displayed() and ("more" in button.text.lower() or "show" in button.text.lower()):
-                                    print(f"Found and clicking show more button with selector {selector}: {button.text}")
-                                    try:
-                                        driver.execute_script("arguments[0].click();", button)
-                                        time.sleep(4)
-                                        print("✅ Successfully clicked button with JavaScript")
-                                        break
-                                    except Exception as js_e:
-                                        print(f"JavaScript click failed: {str(js_e)}")
-                                        try:
-                                            button.click()
-                                            time.sleep(4)
-                                            print("✅ Successfully clicked button with regular click")
-                                            break
-                                        except Exception as click_e:
-                                            print(f"Regular click also failed: {str(click_e)}")
-                        except Exception as e:
-                            print(f"Error with selector {selector}: {str(e)}")
-                            continue
-            except Exception as e:
-                print(f"Error expanding show more buttons: {str(e)}")
                 pass
 
             description = ""
 
-            # Debug: Print page source to understand structure
-            print("🔍 Debug: Looking for job description content...")
-
-            # Save page source for debugging
-            page_source = driver.page_source
-            with open("debug_linkedin_page.html", "w", encoding="utf-8") as f:
-                f.write(page_source)
-            print("📄 Page source saved to debug_linkedin_page.html")
-
-            # Priority 1: Look for the main job description container - be very specific
-            main_description_selectors = [
-                # Most specific selector for the actual job description content
-                "div.description__text.description__text--rich div.show-more-less-html__markup",
-                "section.description div.description__text.description__text--rich div.show-more-less-html__markup",
-                # Try expanded content after clicking show more
-                "div.description__text div.show-more-less-html__markup:not(.show-more-less-html__markup--clamp-after-5)",
-                "div.description__text div.show-more-less-html__markup.show-more-less-html__markup--clamp-after-5"
+            # Priority 1: Most specific LinkedIn description container
+            selectors = [
+                "div.show-more-less-html__markup",
+                "div.description__text",
+                "section.description",
+                "div[data-test-id='job-details-about-the-job-module']",
+                "div.jobs-description__content",
+                "div.jobs-description",
+                "div#job-details",
             ]
 
-            for selector in main_description_selectors:
+            for selector in selectors:
                 try:
-                    elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                    for elem in elements:
-                        text = elem.text.strip()
-                        print(f"📝 Found content with selector '{selector}': {text[:200]}...")
-
-                        # Check if this contains the actual job description content
-                        if (len(text) > 200 and
-                            any(keyword in text.lower() for keyword in [
-                                'about hibiscustech', 'psyplay', 'chess', 'ludo', 'connect 4', 'poker',
-                                'position: full stack product intern', 'frontend learning', 'backend learning',
-                                'what you\'ll learn and build', 'hibiscustech is building', 'ai-powered gaming'
-                            ]) and
-                            not any(skip in text.lower() for skip in [
-                                'be among the first', 'see who', 'no longer accepting', '1 day ago', 'applicants',
-                                'jobs', 'open jobs', 'show more', 'ago', 'years', '₹', '$'
-                            ])):
-                            description = text
-                            print(f"✅ Selected job description: {text[:300]}...")
-                            break
-                    if description:
+                    elem = driver.find_element(By.CSS_SELECTOR, selector)
+                    text = elem.text.strip()
+                    if len(text) > 100:
+                        description = text
+                        print(f"✅ Got description via '{selector}' ({len(text)} chars)")
                         break
-                except Exception as e:
-                    print(f"❌ Error with selector '{selector}': {str(e)}")
+                except:
                     continue
 
-            # Priority 2: Look for structured job description sections with better filtering
+            # Priority 2: Look inside <main> for the longest text block
             if not description:
-                section_selectors = [
-                    "div[data-test-id='job-details-about-the-job-module']",
-                    "section[data-test-id='job-details-about-the-job-module']",
-                    "div.job-details-about-the-job-module",
-                    "div.job-details-jobs-unified-top-card__description-container"
-                ]
+                try:
+                    main = driver.find_element(By.TAG_NAME, "main")
+                    candidates = main.find_elements(By.CSS_SELECTOR, "div, section, article")
+                    best = ""
+                    for elem in candidates:
+                        text = elem.text.strip()
+                        if len(text) > len(best) and len(text) > 200:
+                            # Skip navigation/header-like blocks
+                            if not any(skip in text[:100].lower() for skip in
+                                       ['sign in', 'join now', 'linkedin', 'search jobs']):
+                                best = text
+                    if best:
+                        description = best
+                        print(f"✅ Got description from main content block ({len(best)} chars)")
+                except:
+                    pass
 
-                for selector in section_selectors:
-                    try:
-                        elements = driver.find_elements(By.CSS_SELECTOR, selector)
-                        for elem in elements:
-                            text = elem.text.strip()
-                            print(f"📝 Found section with selector '{selector}': {text[:200]}...")
-                            # Apply same filtering as priority 1
-                            skip_patterns = [
-                                "apply", "save", "share", "report", "show more jobs",
-                                "sign in", "sign up", "join now", "linkedin",
-                                "frontend developer", "back end", "data scientist",
-                                "wipro", "cisco", "unacademy", "zee", "bangalore", "india",
-                                "2 weeks ago", "3 days ago", "5–8 years"
-                            ]
-                            job_listing_indicators = ["ago", "years", "₹", "$", "wipro", "cisco", "unacademy", "zee"]
-
-                            # Count job listing indicators for priority 2 as well
-                            indicator_count_2 = sum(1 for indicator in job_listing_indicators if indicator in text.lower())
-
-                            if (len(text) > 150 and
-                                not any(skip in text.lower() for skip in skip_patterns) and
-                                indicator_count_2 < 3 and  # Allow some indicators but not too many
-                                (not job_keywords or any(keyword in text.lower() for keyword in job_keywords[:2]))):
-                                description = text
-                                print(f"✅ Selected section description: {text[:300]}...")
-                                break
-                        if description:
-                            break
-                    except Exception as e:
-                        print(f"❌ Error with section selector '{selector}': {str(e)}")
-                        continue
-
-            # Priority 3: Search for any substantial text content with refined filtering
+            # Priority 3: Full page body text as last resort
             if not description:
-                print("🔍 Searching for any substantial text content...")
-                # Look specifically in job-related containers first
-                job_containers = [
-                    "div[data-test-id='job-details']",
-                    "div.job-details",
-                    "div.job-view-layout",
-                    "main"
-                ]
-
-                for container_selector in job_containers:
-                    try:
-                        containers = driver.find_elements(By.CSS_SELECTOR, container_selector)
-                        for container in containers:
-                            elements = container.find_elements(By.CSS_SELECTOR, "div, p, span")
-                            for elem in elements:
-                                text = elem.text.strip()
-                                # Count job listing indicators for priority 3 as well
-                                indicator_count_3 = sum(1 for indicator in job_listing_indicators if indicator in text.lower())
-
-                                text_lower = text.lower()
-                                # Apply same filtering as Priority 1
-                                has_job_content_3 = any(keyword in text_lower for keyword in [
-                                    "responsibilities", "requirements", "qualifications", "experience",
-                                    "skills", "duties", "role", "position", "job description",
-                                    "about the job", "about the role", "what you'll do", "what we offer",
-                                    "key responsibilities", "required skills", "frontend", "developer", "intern",
-                                    "html", "css", "javascript", "react", "angular", "vue", "web development",
-                                    "ui/ux", "user interface", "user experience", "responsive design"
-                                ])
-
-                                has_listing_patterns_3 = any(pattern in text_lower for pattern in [
-                                    "days ago", "weeks ago", "months ago", "ago",
-                                    "bengaluru, karnataka, india", "bangalore", "india",
-                                    "5–8 years", "3–5 years", "2–4 years", "0–2 years",
-                                    "sde ii", "sde iii", "software engineer", "full stack",
-                                    "junior web developer", "html developer", "javascript developer",
-                                    "back end developer", "developer internship", "wordpress developer",
-                                    "layout artist", "open jobs", "show more"
-                                ])
-
-                                has_multiple_jobs_3 = sum(1 for company in ["wipro", "cisco", "unacademy", "zee", "deloitte", "healthify"] if company in text_lower) > 1
-
-                                starts_with_job_desc_3 = text_lower.strip().startswith(("about the role", "about the job", "job description", "position summary"))
-
-                                if (len(text) > 200 and
-                                    not any(skip in text_lower for skip in skip_patterns) and
-                                    (has_job_content_3 or starts_with_job_desc_3) and
-                                    not has_multiple_jobs_3 and
-                                    not has_listing_patterns_3 and
-                                    indicator_count_3 < 2 and
-                                    (not job_keywords or any(keyword in text_lower for keyword in job_keywords[:2]))):
-                                    description = text
-                                    print(f"✅ Found substantial content in container: {text[:300]}...")
-                                    break
-                            if description:
-                                break
-                        if description:
-                            break
-                    except:
-                        continue
-
-            # Priority 4: Last resort - get any text that's not obviously navigation or job listings
-            if not description:
-                print("🔍 Last resort search...")
-                all_divs = driver.find_elements(By.CSS_SELECTOR, "div")
-                for div in all_divs:
-                    text = div.text.strip()
-                    if (len(text) > 150 and
-                        not any(skip in text.lower() for skip in [
-                            "apply", "save", "share", "report", "show more jobs",
-                            "sign in", "sign up", "join now", "linkedin",
-                            "frontend developer", "software engineer", "full stack",
-                            "wipro", "cisco", "unacademy", "zee", "bangalore", "india",
-                            "2 weeks ago", "3 days ago", "5–8 years", "sde ii", "sde iii"
-                        ]) and
-                        (not job_keywords or any(keyword in text.lower() for keyword in job_keywords[:2]))):
-                        description = text
-                        print(f"✅ Last resort content: {text[:300]}...")
-                        break
-
-            if description:
-                print(f"🎉 Final description found: {description[:500]}...")
-            else:
-                print("❌ No description found")
+                try:
+                    body_text = driver.find_element(By.TAG_NAME, "body").text.strip()
+                    if len(body_text) > 200:
+                        description = body_text[:5000]  # Cap at 5000 chars
+                        print(f"⚠️ Using full body text as fallback ({len(description)} chars)")
+                except:
+                    pass
 
             return description if description else "No description available"
+
         except Exception as e:
             print(f"Error extracting description: {str(e)}")
             return "No description available"
-    
+
+
     def _get_job_criteria(self, driver):
         """Extract job criteria (type, level, salary, etc.)"""
         criteria = {}
