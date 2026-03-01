@@ -32,21 +32,17 @@ class NaukriScraper(BaseScraper):
 
         # Try Selenium if available
         if not SELENIUM_AVAILABLE:
-            # Return whatever we got from requests, even if incomplete
             try:
-                return self._scrape_with_requests(url)
+                job_data = self._scrape_with_requests(url)
+                if job_data and self.validate_job_data(job_data):
+                    return job_data
             except:
-                return {
-                    'title': 'Unable to extract title',
-                    'company': 'Unable to extract company',
-                    'company_domain': '',
-                    'location': 'Unable to extract location',
-                    'description': 'Could not scrape job data. Chrome is not available on this server.',
-                    'requirements': '', 'job_type': '', 'experience_level': '',
-                    'salary': '', 'company_profile': '',
-                    'job_portal': 'naukri.com', 'url': url,
-                    'error': 'Selenium not available'
-                }
+                pass
+                
+            raise Exception(
+                "Anti-Bot Protection Detected: Naukri blocks automated scanners. "
+                "Please click the 'Text/Description' tab above and manually paste the job description to analyze it."
+            )
 
         driver = None
         try:

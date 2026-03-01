@@ -115,9 +115,15 @@ class LinkedInScraper(BaseScraper):
         # Fallback to requests (always available)
         try:
             job_data = self._scrape_with_requests(url)
-            return job_data
-        except Exception as req_e:
-            raise Exception(f"Requests-based scraping failed: {str(req_e)}")
+            if job_data and self.validate_job_data(job_data):
+                return job_data
+        except:
+            pass
+            
+        raise Exception(
+            "Anti-Bot Protection Detected: LinkedIn blocks automated scanners. "
+            "Please click the 'Text/Description' tab above and manually paste the job description to analyze it."
+        )
 
     def _init_authenticated_driver(self):
         """Initialize Chrome driver with authentication options"""

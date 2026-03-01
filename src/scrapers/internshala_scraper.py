@@ -30,20 +30,17 @@ class InternshalaScraper(BaseScraper):
             print(f"⚠️ Requests scraping failed: {str(e)}")
 
         if not SELENIUM_AVAILABLE:
-            # Return whatever we got from requests, even if incomplete
             try:
-                return self._scrape_with_requests(url)
+                job_data = self._scrape_with_requests(url)
+                if job_data and self.validate_job_data(job_data):
+                    return job_data
             except:
-                return {
-                    'title': 'Unable to extract title',
-                    'company': 'Unable to extract company',
-                    'company_domain': '',
-                    'location': 'Not Specified',
-                    'description': 'Could not scrape job data. Chrome is not available on this server.',
-                    'requirements': '', 'salary': '',
-                    'job_type': 'Internship',
-                    'job_portal': 'internshala.com', 'url': url,
-                }
+                pass
+                
+            raise Exception(
+                "Anti-Bot Protection Detected: Internshala blocks automated scanners. "
+                "Please click the 'Text/Description' tab above and manually paste the job description to analyze it."
+            )
 
         try:
             driver = self.init_selenium_driver()

@@ -8,15 +8,17 @@ import os
 
 # Try to import Selenium (optional dependency for server environments)
 SELENIUM_AVAILABLE = False
-try:
-    from selenium import webdriver
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
-    from selenium.webdriver.chrome.options import Options
-    SELENIUM_AVAILABLE = True
-except ImportError:
-    pass
+import os
+if not os.environ.get('RENDER'):
+    try:
+        from selenium import webdriver
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        from selenium.webdriver.support import expected_conditions as EC
+        from selenium.webdriver.chrome.options import Options
+        SELENIUM_AVAILABLE = True
+    except ImportError:
+        pass
 
 class BaseScraper(ABC):
     """Base class for job portal scrapers"""
@@ -158,8 +160,8 @@ class BaseScraper(ABC):
             pass
         
         raise Exception(
-            f"Could not scrape {portal_name} job data. "
-            "Indeed often blocks automated requests. Please copy and paste the job description text instead."
+            f"Anti-Bot Protection Detected: {portal_name} blocks automated scanners. "
+            "Please click the 'Text/Description' tab above and manually paste the job description to analyze it."
         )
     
     def scrape_with_requests(self, url):
