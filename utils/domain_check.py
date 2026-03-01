@@ -1,8 +1,13 @@
 import re
 from urllib.parse import urlparse
 import socket
-import whois
 from datetime import datetime
+
+try:
+    import whois
+    WHOIS_AVAILABLE = True
+except ImportError:
+    WHOIS_AVAILABLE = False
 
 def get_company_domain(text):
     """Extract company domain from text or URL"""
@@ -84,12 +89,23 @@ def is_suspicious_domain(domain):
 
 
 def get_domain_age(domain):
-    """Get domain age and creation date"""
+    """Get domain age and creation date with timeout"""
+    if not WHOIS_AVAILABLE:
+        return None
+    
     try:
         if not domain or domain == "Not available":
             return None
         
-        w = whois.whois(domain)
+        # Set socket timeout to prevent hanging on Render
+        old_timeout = socket.getdefaulttimeout()
+        socket.setdefaulttimeout(5)  # 5 second max for WHOIS
+        
+        try:
+            w = whois.whois(domain)
+        finally:
+            socket.setdefaulttimeout(old_timeout)
+        
         if w.creation_date:
             if isinstance(w.creation_date, list):
                 creation_date = w.creation_date[0]
@@ -97,7 +113,6 @@ def get_domain_age(domain):
                 creation_date = w.creation_date
             
             if isinstance(creation_date, str):
-                # Try to parse string date
                 try:
                     creation_date = datetime.strptime(creation_date.split(' ')[0], '%Y-%m-%d')
                 except:
@@ -109,7 +124,7 @@ def get_domain_age(domain):
                 'age_years': age_days / 365,
                 'creation_date': creation_date.strftime('%Y-%m-%d') if hasattr(creation_date, 'strftime') else str(creation_date)
             }
-    except:
+    except Exception:
         pass
     
     return None
@@ -158,7 +173,7 @@ def check_domain_reputation(domain):
     }
 
 
-def verify_company_legitimacy(company_name, domain):
+def verify_company_legitimacy(company_name, domain, reputation=None):
     """Enhanced company legitimacy verification"""
     legitimacy_indicators = []
     score = 50  # Base score
@@ -179,10 +194,11 @@ def verify_company_legitimacy(company_name, domain):
                 score += 10
                 legitimacy_indicators.append("Company name contains common business words")
     
-    # Check domain reputation
+    # Use provided reputation or fetch it (avoid redundant WHOIS calls)
     if domain and domain != "Not available":
-        reputation = check_domain_reputation(domain)
-        score += (reputation['reputation_score'] - 50)  # Adjust based on reputation
+        if reputation is None:
+            reputation = check_domain_reputation(domain)
+        score += (reputation['reputation_score'] - 50)
         
         if reputation['trust_level'] in ['HIGH', 'GOOD']:
             legitimacy_indicators.append(f"Domain trust level: {reputation['trust_level']}")
@@ -215,26 +231,35 @@ def verify_company_legitimacy(company_name, domain):
 
 def analyze_domain_complete(text):
     """Complete domain analysis with all metrics"""
-    # Extract domain
-    domain = get_company_domain(text)
-    
-    # Check for suspicious patterns
-    is_suspicious, suspicion_reason = is_suspicious_domain(domain)
-    
-    # Get reputation
-    reputation = check_domain_reputation(domain)
-    
-    # Extract company name if possible
-    company_match = re.search(r'(?:company|organization|company name)[:\s]+([A-Za-z0-9\s]+?)(?:\n|$)', text, re.IGNORECASE)
-    company_name = company_match.group(1).strip() if company_match else None
-    
-    # Verify legitimacy
-    legitimacy = verify_company_legitimacy(company_name, domain)
-    
-    return {
-        'domain': domain,
-        'is_suspicious': is_suspicious,
-        'suspicion_reason': suspicion_reason,
-        'reputation': reputation,
-        'legitimacy': legitimacy
-    }
+    try:
+        # Extract domain
+        domain = get_company_domain(text)
+        
+        # Check for suspicious patterns
+        is_suspicious, suspicion_reason = is_suspicious_domain(domain)
+        
+        # Get reputation (single WHOIS call)
+        reputation = check_domain_reputation(domain)
+        
+        # Extract company name if possible
+        company_match = re.search(r'(?:company|organization|company name)[:\s]+([A-Za-z0-9\s]+?)(?:\n|$)', text, re.IGNORECASE)
+        company_name = company_match.group(1).strip() if company_match else None
+        
+        # Verify legitimacy — reuse reputation to avoid redundant WHOIS
+        legitimacy = verify_company_legitimacy(company_name, domain, reputation=reputation)
+        
+        return {
+            'domain': domain,
+            'is_suspicious': is_suspicious,
+            'suspicion_reason': suspicion_reason,
+            'reputation': reputation,
+            'legitimacy': legitimacy
+        }
+    except Exception as e:
+        return {
+            'domain': 'Unknown',
+            'is_suspicious': False,
+            'suspicion_reason': f'Domain analysis failed: {str(e)}',
+            'reputation': {'reputation_score': 50, 'trust_level': 'UNKNOWN', 'reason': 'Analysis failed'},
+            'legitimacy': {'score': 50, 'legitimacy_level': 'UNCERTAIN', 'indicators': [], 'domain': '', 'company': ''}
+        }
