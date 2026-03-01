@@ -7,18 +7,18 @@ from urllib.parse import urlparse
 import os
 
 # Try to import Selenium (optional dependency for server environments)
+# Try to import Selenium (optional dependency for server environments)
 SELENIUM_AVAILABLE = False
-import os
-if not os.environ.get('RENDER'):
-    try:
-        from selenium import webdriver
-        from selenium.webdriver.common.by import By
-        from selenium.webdriver.support.ui import WebDriverWait
-        from selenium.webdriver.support import expected_conditions as EC
-        from selenium.webdriver.chrome.options import Options
-        SELENIUM_AVAILABLE = True
-    except ImportError:
-        pass
+try:
+    from selenium import webdriver
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.chrome.service import Service
+    SELENIUM_AVAILABLE = True
+except ImportError:
+    pass
 
 class BaseScraper(ABC):
     """Base class for job portal scrapers"""
@@ -113,7 +113,14 @@ class BaseScraper(ABC):
             ]
             chrome_options.add_argument(f"user-agent={random.choice(user_agents)}")
 
-            driver = webdriver.Chrome(options=chrome_options)
+            # Use system chromium if available (Docker deployment)
+            if os.path.exists('/usr/bin/chromium'):
+                chrome_options.binary_location = '/usr/bin/chromium'
+                service = Service(executable_path='/usr/bin/chromedriver')
+                driver = webdriver.Chrome(service=service, options=chrome_options)
+            else:
+                driver = webdriver.Chrome(options=chrome_options)
+                
             driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             driver.set_page_load_timeout(30) # Shorter timeout for Render
             driver.set_script_timeout(20)

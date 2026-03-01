@@ -1,9 +1,7 @@
 services:
   - type: web
     name: jobguard-ai-api
-    runtime: python
-    buildCommand: pip install -r requirements.txt && python -c "from selenium import webdriver; from selenium.webdriver.chrome.options import Options; opts = Options(); opts.add_argument('--headless'); opts.add_argument('--no-sandbox'); opts.add_argument('--disable-dev-shm-usage'); webdriver.Chrome(options=opts).quit(); print('Chrome pre-downloaded!')"
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 300
+    env: docker
     envVars:
       - key: FLASK_ENV
         value: production
@@ -11,7 +9,5 @@ services:
         value: "False"
       - key: SECRET_KEY
         generateValue: true
-      - key: PYTHON_VERSION
-        value: "3.11.7"
     healthCheckPath: /api/health
     autoDeploy: true
