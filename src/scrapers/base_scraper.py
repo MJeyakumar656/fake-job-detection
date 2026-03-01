@@ -141,14 +141,18 @@ class BaseScraper(ABC):
                 raise Exception(f"Both scraping methods failed for {portal_name}: {str(e)}")
         
         # If we got partial data from requests, return it anyway
+        # If we got partial data from requests, check if it's usable
         try:
             job_data = self.scrape_with_requests(url)
-            if job_data:
+            if job_data and self.validate_job_data(job_data):
                 return job_data
         except:
             pass
         
-        raise Exception(f"Could not scrape {portal_name} job data. Chrome is not available on this server for JavaScript-heavy pages.")
+        raise Exception(
+            f"Could not scrape {portal_name} job data. "
+            "Indeed often blocks automated requests. Please copy and paste the job description text instead."
+        )
     
     def scrape_with_requests(self, url):
         """Scrape using requests/BeautifulSoup (to be overridden by subclasses)"""
@@ -165,5 +169,19 @@ class BaseScraper(ABC):
     
     def validate_job_data(self, data):
         """Validate scraped job data"""
-        required_fields = ['title', 'company', 'description', 'location']
-        return all(data.get(field) for field in required_fields)
+        if not data:
+            return False
+            
+        # Check for empty or placeholder values
+        title = data.get('title', '').strip()
+        company = data.get('company', '').strip()
+        description = data.get('description', '').strip()
+        
+        if not title or title == 'Unknown Job Title':
+            return False
+        if not company or company == 'Unknown Company':
+            return False
+        if not description or len(description) < 50:
+            return False
+            
+        return True
