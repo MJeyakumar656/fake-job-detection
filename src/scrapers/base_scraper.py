@@ -8,16 +8,15 @@ import os
 
 # Try to import Selenium (optional dependency for server environments)
 SELENIUM_AVAILABLE = False
-if not os.environ.get('RENDER'):
-    try:
-        from selenium import webdriver
-        from selenium.webdriver.common.by import By
-        from selenium.webdriver.support.ui import WebDriverWait
-        from selenium.webdriver.support import expected_conditions as EC
-        from selenium.webdriver.chrome.options import Options
-        SELENIUM_AVAILABLE = True
-    except ImportError:
-        pass
+try:
+    from selenium import webdriver
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver.chrome.options import Options
+    SELENIUM_AVAILABLE = True
+except ImportError:
+    pass
 
 class BaseScraper(ABC):
     """Base class for job portal scrapers"""
@@ -88,11 +87,20 @@ class BaseScraper(ABC):
             chrome_options = Options()
             chrome_options.add_argument("--headless")
             chrome_options.add_argument("--no-sandbox")
-            chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--disable-dev-shm-usage") # Critical for Render
             chrome_options.add_argument("--disable-gpu")
             chrome_options.add_argument("--disable-extensions")
             chrome_options.add_argument("--window-size=1920,1080")
             chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+            
+            # Additional aggressive memory-saving options for Render's 512MB limit
+            chrome_options.add_argument("--disable-software-rasterizer")
+            chrome_options.add_argument("--disable-features=Translate")
+            chrome_options.add_argument("--single-process") # Reduces memory footprint significantly
+            chrome_options.add_argument("--js-flags=--max-old-space-size=128") # Strict V8 memory limit
+            chrome_options.add_argument("--disk-cache-dir=/tmp/chrome-cache") # Use tmp instead of RAM
+            chrome_options.page_load_strategy = 'eager' # Don't wait for images/CSS to finish loading completely
+            
             chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
             chrome_options.add_experimental_option('useAutomationExtension', False)
 
@@ -105,8 +113,8 @@ class BaseScraper(ABC):
 
             driver = webdriver.Chrome(options=chrome_options)
             driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            driver.set_page_load_timeout(45)
-            driver.set_script_timeout(30)
+            driver.set_page_load_timeout(30) # Shorter timeout for Render
+            driver.set_script_timeout(20)
             return driver
         except Exception as e:
             raise Exception(f"Failed to initialize Selenium: {str(e)}")
