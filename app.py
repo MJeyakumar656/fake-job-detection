@@ -104,8 +104,14 @@ def not_found(error):
 @app.errorhandler(500)
 def internal_error(error):
     """Handle 500 errors"""
-    app.logger.error(f'Server Error: {error}')
-    return jsonify({'error': 'Internal server error'}), 500
+    import traceback
+    tb = traceback.format_exc()
+    app.logger.error(f'Server Error: {error}\n{tb}')
+    return jsonify({
+        'error': str(error),
+        'traceback': tb,
+        'success': False
+    }), 500
 
 @app.errorhandler(429)
 def ratelimit_handler(e):
