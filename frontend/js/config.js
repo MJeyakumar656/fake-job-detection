@@ -1,15 +1,16 @@
 // API Configuration
-// Change this to your Render.com backend URL after deployment
+// 🚇 Cloudflare Tunnel — points to your local laptop. Run cloudflared first!
 const API_BASE_URL = window.location.hostname === 'localhost'
     ? ''
-    : 'https://jobguard-ai-api.onrender.com';
+    : 'https://monte-only-immediate-fell.trycloudflare.com';
+
 
 /**
  * Make API request with base URL, timeout, and retry
  */
 async function apiRequest(endpoint, options = {}) {
     const url = `${API_BASE_URL}${endpoint}`;
-    const timeout = options.timeout || 240000; // 4 min timeout for initial Render free tier wake up
+    const timeout = options.timeout || 60000; // 60 second timeout (local machine is fast)
 
     // Create abort controller for timeout
     const controller = new AbortController();
@@ -34,10 +35,9 @@ async function apiRequest(endpoint, options = {}) {
 
         if (error.message === 'Failed to fetch' || error instanceof TypeError) {
             throw new Error(
-                'Cannot connect to the analysis server. This can happen when:\n' +
-                '• The server is waking up (Render free tier sleeps after inactivity — wait 60-120 seconds and retry)\n' +
-                '• The server is redeploying\n' +
-                'Please wait a moment and try again.'
+                'Cannot connect. Make sure:\n' +
+                '• Your laptop is on and python app.py is running\n' +
+                '• cloudflared tunnel is running in a separate terminal'
             );
         }
 
