@@ -79,7 +79,10 @@ class NaukriScraper(BaseScraper):
             job_data = self._extract_job_data(driver, url)
 
             if not self.validate_job_data(job_data):
-                print("⚠️ Validation failed, but returning partial data")
+                raise Exception(
+                    "Anti-Bot Protection Detected: Naukri blocks automated scanners. "
+                    "Please click the 'Text/Description' tab above and manually paste the job description to analyze it."
+                )
 
             return job_data
 

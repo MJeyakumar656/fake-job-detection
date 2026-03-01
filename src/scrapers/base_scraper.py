@@ -153,11 +153,14 @@ class BaseScraper(ABC):
         if SELENIUM_AVAILABLE:
             try:
                 print(f"  [Selenium] Trying browser-based scraping for {portal_name}...")
-                return self.scrape_with_selenium(url)
+                job_data = self.scrape_with_selenium(url)
+                if job_data and self.validate_job_data(job_data):
+                    print(f"  [Selenium] Successfully scraped {portal_name} job data")
+                    return job_data
+                print(f"  [Selenium] Scraped data invalid. Bot protection prevented extraction.")
             except Exception as e:
-                raise Exception(f"Both scraping methods failed for {portal_name}: {str(e)}")
+                print(f"  [Selenium] Error during browser scraping: {str(e)}")
         
-        # If we got partial data from requests, return it anyway
         # If we got partial data from requests, check if it's usable
         try:
             job_data = self.scrape_with_requests(url)

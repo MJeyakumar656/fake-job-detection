@@ -65,11 +65,16 @@ class InternshalaScraper(BaseScraper):
             driver.quit()
 
             if not self.validate_job_data(job_data):
-                raise Exception("Failed to extract complete job data")
+                raise Exception(
+                    "Anti-Bot Protection Detected: Internshala blocks automated scanners. "
+                    "Please click the 'Text/Description' tab above and manually paste the job description to analyze it."
+                )
 
             return job_data
 
         except Exception as e:
+            if "Anti-Bot Protection Detected" in str(e):
+                raise
             raise Exception(f"Internshala scraping error: {str(e)}")
 
     def _scrape_with_requests(self, url):
