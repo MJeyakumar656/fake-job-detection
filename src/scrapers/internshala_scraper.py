@@ -78,8 +78,17 @@ class InternshalaScraper(BaseScraper):
             raise Exception(f"Internshala scraping error: {str(e)}")
 
     def _scrape_with_requests(self, url):
-        """Scrape Internshala using requests/BeautifulSoup"""
-        response = requests.get(url, headers=self.headers, timeout=self.timeout)
+        """Scrape Internshala using requests/BeautifulSoup (with optional ScraperAPI)"""
+        import os
+        api_key = os.environ.get('SCRAPER_API_KEY')
+        if api_key:
+            from urllib.parse import urlencode
+            payload = {'api_key': api_key, 'url': url, 'render_js': 'true'}
+            proxy_url = 'https://api.scraperapi.com/?' + urlencode(payload)
+            response = requests.get(proxy_url, timeout=45)
+        else:
+            response = requests.get(url, headers=self.headers, timeout=self.timeout)
+            
         response.raise_for_status()
         soup = BeautifulSoup(response.content, 'html.parser')
         

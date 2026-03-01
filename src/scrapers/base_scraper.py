@@ -50,10 +50,21 @@ class BaseScraper(ABC):
             return False
     
     def get_soup(self, url):
-        """Get BeautifulSoup object from URL using requests"""
+        """Get BeautifulSoup object from URL using requests (with optional ScraperAPI)"""
         try:
             timeout = 20 if 'linkedin.com' in url else self.timeout
-            response = requests.get(url, headers=self.headers, timeout=timeout)
+            
+            # Check if ScraperAPI is configured to bypass Datacenter IP blocks
+            api_key = os.environ.get('SCRAPER_API_KEY')
+            if api_key:
+                from urllib.parse import urlencode
+                payload = {'api_key': api_key, 'url': url, 'render_js': 'true'}
+                proxy_url = 'https://api.scraperapi.com/?' + urlencode(payload)
+                print(f"  [ScraperAPI] Routing request through Residential Proxy...")
+                response = requests.get(proxy_url, timeout=45)
+            else:
+                response = requests.get(url, headers=self.headers, timeout=timeout)
+                
             response.raise_for_status()
             return BeautifulSoup(response.content, 'html.parser')
         except requests.exceptions.Timeout:
@@ -66,9 +77,17 @@ class BaseScraper(ABC):
             raise Exception(f"Failed to fetch {url}: {str(e)}")
     
     def get_page_text(self, url):
-        """Get raw page text content using requests (lightweight fallback)"""
+        """Get raw page text content using requests (with optional ScraperAPI)"""
         try:
-            response = requests.get(url, headers=self.headers, timeout=self.timeout)
+            api_key = os.environ.get('SCRAPER_API_KEY')
+            if api_key:
+                from urllib.parse import urlencode
+                payload = {'api_key': api_key, 'url': url, 'render_js': 'true'}
+                proxy_url = 'https://api.scraperapi.com/?' + urlencode(payload)
+                response = requests.get(proxy_url, timeout=45)
+            else:
+                response = requests.get(url, headers=self.headers, timeout=self.timeout)
+                
             response.raise_for_status()
             soup = BeautifulSoup(response.content, 'html.parser')
             
