@@ -277,21 +277,30 @@ def get_supported_portals():
 @api_bp.route('/test-analysis', methods=['GET'])
 def test_analysis():
     """Test endpoint with sample job data"""
-    analyzer = get_analyzer()
-    
-    sample_job = {
-        'title': 'Senior Software Engineer',
-        'company': 'Tech Corp',
-        'company_domain': 'techcorp.com',
-        'location': 'San Francisco, CA',
-        'description': 'We are looking for a Senior Software Engineer with 5+ years of experience in full-stack development. You will work on challenging problems and lead a team of engineers. Requirements: Python, JavaScript, React, Node.js, Docker, Kubernetes. Salary: $150,000 - $200,000 per year.',
-        'requirements': 'Python, JavaScript, React, Node.js, Docker, Kubernetes',
-        'salary': '$150,000 - $200,000',
-        'company_profile': 'Leading technology company',
-        'job_portal': 'manual_input'
-    }
-    
-    result, features = analyzer._analyze_job_data(sample_job)
-    result['success'] = True
-    
-    return jsonify(result), 200
+    try:
+        analyzer = get_analyzer()
+        
+        sample_job = {
+            'title': 'Senior Software Engineer',
+            'company': 'Tech Corp',
+            'company_domain': 'techcorp.com',
+            'location': 'San Francisco, CA',
+            'description': 'We are looking for a Senior Software Engineer with 5+ years of experience in full-stack development. You will work on challenging problems and lead a team of engineers. Requirements: Python, JavaScript, React, Node.js, Docker, Kubernetes. Salary: $150,000 - $200,000 per year.',
+            'requirements': 'Python, JavaScript, React, Node.js, Docker, Kubernetes',
+            'salary': '$150,000 - $200,000',
+            'company_profile': 'Leading technology company',
+            'job_portal': 'manual_input'
+        }
+        
+        result, features = analyzer._analyze_job_data(sample_job)
+        result['success'] = True
+        
+        return jsonify(result), 200
+    except Exception as e:
+        import traceback
+        logger.error(f"Test analysis error: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({
+            'error': str(e),
+            'traceback': traceback.format_exc(),
+            'success': False
+        }), 500
