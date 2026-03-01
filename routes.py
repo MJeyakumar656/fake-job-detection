@@ -291,7 +291,7 @@ def test_analysis():
         'job_portal': 'manual_input'
     }
     
-    result = analyzer._analyze_job_data(sample_job)
+    result, features = analyzer._analyze_job_data(sample_job)
     result['success'] = True
     
     return jsonify(result), 200

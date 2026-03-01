@@ -134,6 +134,25 @@ class TestBatchAnalyze:
         assert response.status_code == 400
 
 
+class TestAnalysisEndpoint:
+    """Test the /api/test-analysis endpoint."""
+
+    def test_test_analysis_returns_200(self, client):
+        """Test analysis endpoint should return valid result."""
+        response = client.get('/api/test-analysis')
+        assert response.status_code == 200
+
+    def test_test_analysis_returns_success(self, client):
+        """Test analysis should return success with prediction data."""
+        response = client.get('/api/test-analysis')
+        data = json.loads(response.data)
+        assert data.get('success') is True
+        assert 'final_prediction' in data
+        assert 'is_fake' in data
+        assert 'combined_confidence' in data
+        assert 'red_flags_count' in data
+
+
 class TestPageRoutes:
     """Test HTML page routes."""
 

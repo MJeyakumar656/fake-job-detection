@@ -21,12 +21,12 @@ const recommendationList = document.getElementById('recommendationList');
 /**
  * Initialize result page
  */
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     console.log('Result page loaded');
-    
+
     // Get analysis result from session storage or session
     const result = getAnalysisResult();
-    
+
     if (result) {
         displayResult(result);
     } else {
@@ -46,12 +46,12 @@ function getAnalysisResult() {
     if (result) {
         return JSON.parse(result);
     }
-    
+
     // Try window data (passed from server)
     if (window.analysisResult) {
         return window.analysisResult;
     }
-    
+
     return null;
 }
 
@@ -100,7 +100,7 @@ function displayResult(result) {
 function displayPredictionBadge(result) {
     const isFake = result.is_fake;
     const confidence = result.combined_confidence || result.ai_confidence || 0;
-    
+
     // Update badge styling
     if (isFake) {
         predictionBadge.style.background = 'linear-gradient(135deg, #ff6b6b 0%, #ff4757 100%)';
@@ -109,7 +109,7 @@ function displayPredictionBadge(result) {
     } else {
         predictionBadge.style.background = 'linear-gradient(135deg, #51cf66 0%, #40c057 100%)';
         predictionText.textContent = 'GENUINE JOB';
-        
+
         // Provide description based on confidence level
         if (confidence > 70) {
             predictionDescription.textContent = 'This job posting shows minimal red flags and appears trustworthy';
@@ -130,7 +130,7 @@ function displayJobDetails(result) {
     companyDomain.textContent = result.company_domain || 'N/A';
     jobTitle.textContent = result.job_title || 'Unknown';
     jobLocation.textContent = result.location || 'Not Specified';
-    
+
     // Display quality badge
     const quality = result.job_quality || 'Low';
     qualityBadge.textContent = quality;
@@ -142,10 +142,10 @@ function displayJobDetails(result) {
  */
 function displayConfidenceScore(result) {
     const confidence = result.combined_confidence || result.ai_confidence || 50;
-    
+
     confidencePercentage.textContent = confidence.toFixed(1) + '%';
     confidenceFill.style.width = confidence + '%';
-    
+
     // Update color based on confidence
     if (confidence > 70) {
         confidenceFill.style.background = 'linear-gradient(90deg, #ff6b6b, #ff4757)';
@@ -162,27 +162,27 @@ function displayConfidenceScore(result) {
 function displayRedFlags(result) {
     const redFlags = result.red_flags_list || [];
     const count = result.red_flags_count || 0;
-    
+
     redFlagCount.textContent = count;
     severityLevel.textContent = result.red_flags_severity || 'Low';
-    
+
     // Clear existing red flags
     redFlagsList.innerHTML = '';
-    
+
     if (count === 0) {
         redFlagsList.innerHTML = '<div style="text-align: center; color: var(--success-color);"><i class="fas fa-check-circle"></i> No red flags detected</div>';
         return;
     }
-    
+
     // Display red flags
     redFlags.forEach(flag => {
         const flagItem = document.createElement('div');
         flagItem.className = 'red-flag-item';
-        
+
         const description = flag.replace(/_/g, ' ');
-        
+
         flagItem.innerHTML = '<i class="fas fa-times-circle"></i><span>' + description + '</span>';
-        
+
         redFlagsList.appendChild(flagItem);
     });
 }
@@ -205,7 +205,7 @@ function displayDescription(result) {
         descriptionPreview.textContent = displayText;
         descriptionSection.style.display = 'block';
     } else {
-        const jobDetails = 'Job Title: ' + (result.job_title || 'Not specified') + 
+        const jobDetails = 'Job Title: ' + (result.job_title || 'Not specified') +
             '\nCompany: ' + (result.company || 'Not specified') +
             '\nLocation: ' + (result.location || 'Not specified') +
             '\nPortal: ' + (result.job_portal || 'Not specified');
@@ -222,9 +222,9 @@ function displayRecommendations(result) {
     const isFake = result.is_fake;
     const redFlags = result.red_flags_list || [];
     const confidence = result.combined_confidence || result.ai_confidence || 0;
-    
+
     let recommendations = [];
-    
+
     if (isFake) {
         recommendations.push('Do NOT apply to this job posting. It shows clear signs of being fraudulent.');
         recommendations.push('Report this job posting to the job portal immediately.');
@@ -244,19 +244,19 @@ function displayRecommendations(result) {
             recommendations.push('Research the company thoroughly.');
         }
     }
-    
+
     // Add specific recommendations based on red flags
     if (redFlags.includes('unrealistic_salary')) {
         recommendations.push('The salary mentioned seems unrealistic. Verify with industry standards.');
     }
-    
+
     if (redFlags.includes('suspicious_email') || redFlags.includes('has_suspicious_domain')) {
         recommendations.push('The company email or domain looks suspicious. Verify through official company website.');
     }
-    
+
     // Display recommendations
     recommendationList.innerHTML = '';
-    
+
     recommendations.forEach(rec => {
         const recItem = document.createElement('div');
         recItem.className = 'recommendation-item';
@@ -280,14 +280,14 @@ function showErrorState(error) {
  */
 async function downloadReport() {
     const result = getAnalysisResult();
-    
+
     if (!result) {
         alert('No analysis result to download');
         return;
     }
-    
+
     const reportContent = 'FAKE JOB DETECTION ANALYSIS REPORT\n==================================\n\nGenerated: ' + new Date().toLocaleString() + '\n\nPREDICTION\n----------\nStatus: ' + (result.is_fake ? 'FAKE JOB' : 'GENUINE JOB') + '\nConfidence: ' + (result.combined_confidence || result.ai_confidence).toFixed(1) + '%\nQuality: ' + (result.job_quality || 'Unknown') + '\n\nJOB DETAILS\n-----------\nPortal: ' + result.job_portal + '\nCompany: ' + result.company + '\nDomain: ' + result.company_domain + '\nTitle: ' + result.job_title + '\nLocation: ' + result.location + '\n\nRED FLAGS: ' + result.red_flags_count + '\n-----------\n' + (result.red_flags_list ? result.red_flags_list.join('\n') : 'None') + '\n\n==================================\nThis report was generated by JobGuard AI';
-    
+
     const blob = new Blob([reportContent], { type: 'text/plain' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -304,14 +304,14 @@ async function downloadReport() {
  */
 async function shareResult() {
     const result = getAnalysisResult();
-    
+
     if (!result) {
         alert('No analysis result to share');
         return;
     }
-    
+
     const shareText = 'JobGuard AI - Job Analysis\n\nJob: ' + result.job_title + '\nCompany: ' + result.company + '\nStatus: ' + (result.is_fake ? 'FAKE JOB' : 'GENUINE JOB') + '\nConfidence: ' + (result.combined_confidence || result.ai_confidence).toFixed(1) + '%\nRed Flags: ' + result.red_flags_count;
-    
+
     if (navigator.share) {
         try {
             await navigator.share({
@@ -333,7 +333,7 @@ async function shareResult() {
  * Redirect to home
  */
 function redirectToHome() {
-    window.location.href = '/';
+    window.location.href = 'index.html';
 }
 
 // ==================== EXPORT FUNCTIONS ====================

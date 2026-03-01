@@ -409,15 +409,6 @@ class JobAnalyzer:
         # Calculate red flags severity
         red_flags_severity = self._assess_severity(red_flags, combined_score)
 
-        # Domain analysis
-        domain = job_data.get('company_domain', '')
-        if domain:
-            try:
-                domain_analysis = analyze_domain_complete(domain + " " + job_data.get('description', ''))
-                result['domain_analysis'] = domain_analysis
-            except Exception as e:
-                pass
-
         # Create result
         result = {
             'final_prediction': final_prediction,
@@ -437,6 +428,15 @@ class JobAnalyzer:
             'success': True,
             'error': None
         }
+
+        # Domain analysis (after result dict is created)
+        domain = job_data.get('company_domain', '')
+        if domain:
+            try:
+                domain_analysis = analyze_domain_complete(domain + " " + job_data.get('description', ''))
+                result['domain_analysis'] = domain_analysis
+            except Exception as e:
+                pass
 
         return result, features
     

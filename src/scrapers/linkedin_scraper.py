@@ -1,13 +1,15 @@
-from src.scrapers.base_scraper import BaseScraper
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.options import Options
+from src.scrapers.base_scraper import BaseScraper, SELENIUM_AVAILABLE
 import time
 import re
 import requests
 from bs4 import BeautifulSoup
 import os
+
+if SELENIUM_AVAILABLE:
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver.chrome.options import Options
 
 class LinkedInScraper(BaseScraper):
     """Scraper for LinkedIn job postings with authentication support"""
@@ -54,66 +56,68 @@ class LinkedInScraper(BaseScraper):
             if match:
                 url = f"https://www.linkedin.com/jobs/view/{match.group(1)}"
 
-        # Try Selenium with authentication first for better results
+        # Try Selenium with authentication first for better results (only if available)
         driver = None
-        try:
-            print("🔄 Trying Selenium with authentication...")
-            driver = self._init_authenticated_driver()
-            driver.get(url)
-            
-            # Wait for page load and check if login required
-            time.sleep(5)
-            
-            # Check if we're on a login page
-            if self._is_login_page(driver):
-                print("⚠️ LinkedIn requires authentication. Attempting to handle...")
-                # Try to proceed without login - LinkedIn shows limited content
-                job_data = self._scrape_limited_content(driver, url)
-                if job_data and job_data.get('description') != 'No description available':
-                    return job_data
-            
-            # Wait for page to load with timeout
+        if SELENIUM_AVAILABLE:
             try:
-                WebDriverWait(driver, 25).until(
-                    lambda d: d.find_element(By.CSS_SELECTOR, "h1.top-card-layout__title") or
-                             d.find_element(By.CSS_SELECTOR, "h1.job-title") or
-                             d.find_element(By.CSS_SELECTOR, "h1") or
-                             d.find_element(By.CSS_SELECTOR, "div[data-test-id='job-details']")
-                )
-            except Exception as wait_e:
-                print(f"⚠️ Page load timeout: {str(wait_e)}")
-
-            # Extract job data
-            job_data = self._extract_job_data(driver)
-            
-            # If description still not found, try requests fallback
-            if not job_data.get('description') or job_data.get('description') == 'No description available':
-                print("🔄 Trying requests as fallback for description...")
+                print("🔄 Trying Selenium with authentication...")
+                driver = self._init_authenticated_driver()
+                driver.get(url)
+                
+                # Wait for page load and check if login required
+                time.sleep(5)
+                
+                # Check if we're on a login page
+                if self._is_login_page(driver):
+                    print("⚠️ LinkedIn requires authentication. Attempting to handle...")
+                    job_data = self._scrape_limited_content(driver, url)
+                    if job_data and job_data.get('description') != 'No description available':
+                        return job_data
+                
+                # Wait for page to load with timeout
                 try:
-                    requests_data = self._scrape_with_requests(url)
-                    if requests_data.get('description') and requests_data['description'] != 'No description available':
-                        job_data['description'] = requests_data['description']
-                except:
-                    pass
-            
-            return job_data
+                    WebDriverWait(driver, 25).until(
+                        lambda d: d.find_element(By.CSS_SELECTOR, "h1.top-card-layout__title") or
+                                 d.find_element(By.CSS_SELECTOR, "h1.job-title") or
+                                 d.find_element(By.CSS_SELECTOR, "h1") or
+                                 d.find_element(By.CSS_SELECTOR, "div[data-test-id='job-details']")
+                    )
+                except Exception as wait_e:
+                    print(f"⚠️ Page load timeout: {str(wait_e)}")
 
-        except Exception as e:
-            print(f"❌ Selenium scraping failed: {str(e)}")
-            print("🔄 Trying requests-based fallback...")
-            
-            # Fallback to requests
-            try:
-                job_data = self._scrape_with_requests(url)
+                # Extract job data
+                job_data = self._extract_job_data(driver)
+                
+                # If description still not found, try requests fallback
+                if not job_data.get('description') or job_data.get('description') == 'No description available':
+                    print("🔄 Trying requests as fallback for description...")
+                    try:
+                        requests_data = self._scrape_with_requests(url)
+                        if requests_data.get('description') and requests_data['description'] != 'No description available':
+                            job_data['description'] = requests_data['description']
+                    except:
+                        pass
+                
                 return job_data
-            except Exception as req_e:
-                raise Exception(f"Both Selenium and requests failed. Selenium: {str(e)}, Requests: {str(req_e)}")
-        finally:
-            if driver:
-                try:
-                    driver.quit()
-                except:
-                    pass
+
+            except Exception as e:
+                print(f"❌ Selenium scraping failed: {str(e)}")
+                print("🔄 Trying requests-based fallback...")
+            finally:
+                if driver:
+                    try:
+                        driver.quit()
+                    except:
+                        pass
+        else:
+            print("ℹ️ Selenium not available, using requests-based scraping...")
+
+        # Fallback to requests (always available)
+        try:
+            job_data = self._scrape_with_requests(url)
+            return job_data
+        except Exception as req_e:
+            raise Exception(f"Requests-based scraping failed: {str(req_e)}")
 
     def _init_authenticated_driver(self):
         """Initialize Chrome driver with authentication options"""

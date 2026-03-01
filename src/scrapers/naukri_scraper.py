@@ -1,9 +1,14 @@
-from src.scrapers.base_scraper import BaseScraper
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from src.scrapers.base_scraper import BaseScraper, SELENIUM_AVAILABLE
 import time
 import re
+import requests
+from bs4 import BeautifulSoup
+import json
+
+if SELENIUM_AVAILABLE:
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
 
 class NaukriScraper(BaseScraper):
     """Scraper for Naukri.com job postings"""
@@ -14,6 +19,34 @@ class NaukriScraper(BaseScraper):
 
         if 'naukri.com' not in url:
             raise Exception("Invalid Naukri URL")
+
+        # Try requests-based scraping first (works everywhere including Render)
+        try:
+            job_data = self._scrape_with_requests(url)
+            if self.validate_job_data(job_data):
+                print("✅ Successfully scraped Naukri job via requests")
+                return job_data
+            print("⚠️ Requests scraping returned incomplete data")
+        except Exception as e:
+            print(f"⚠️ Requests scraping failed: {str(e)}")
+
+        # Try Selenium if available
+        if not SELENIUM_AVAILABLE:
+            # Return whatever we got from requests, even if incomplete
+            try:
+                return self._scrape_with_requests(url)
+            except:
+                return {
+                    'title': 'Unable to extract title',
+                    'company': 'Unable to extract company',
+                    'company_domain': '',
+                    'location': 'Unable to extract location',
+                    'description': 'Could not scrape job data. Chrome is not available on this server.',
+                    'requirements': '', 'job_type': '', 'experience_level': '',
+                    'salary': '', 'company_profile': '',
+                    'job_portal': 'naukri.com', 'url': url,
+                    'error': 'Selenium not available'
+                }
 
         driver = None
         try:
@@ -33,24 +66,21 @@ class NaukriScraper(BaseScraper):
             driver.execute_script("window.scrollTo(0, 500);")
             time.sleep(2)
             
-            # Wait for page to load - try multiple possible selectors with longer timeout
+            # Wait for page to load
             try:
                 WebDriverWait(driver, 30).until(
                     lambda d: d.find_element(By.CSS_SELECTOR, "h1, .job-title, .jd-header-title, .jobTitle, body")
                 )
             except:
-                # If page doesn't load properly, still try to extract what we can
-                time.sleep(5)  # Give extra time for dynamic content
+                time.sleep(5)
                 print("⚠️ Page load timeout, attempting extraction anyway...")
 
-            # Additional wait for React to render
             time.sleep(3)
             
             job_data = self._extract_job_data(driver, url)
 
             if not self.validate_job_data(job_data):
                 print("⚠️ Validation failed, but returning partial data")
-                # Don't raise exception, return what we have
 
             return job_data
 
@@ -58,20 +88,15 @@ class NaukriScraper(BaseScraper):
             error_msg = f"Naukri scraping error: {str(e)}"
             print(f"❌ {error_msg}")
 
-            # Return minimal data instead of failing completely
             return {
                 'title': 'Unable to extract title',
                 'company': 'Unable to extract company',
                 'company_domain': '',
                 'location': 'Unable to extract location',
                 'description': f'Error: {error_msg}',
-                'requirements': '',
-                'job_type': '',
-                'experience_level': '',
-                'salary': '',
-                'company_profile': '',
-                'job_portal': 'naukri.com',
-                'url': url,
+                'requirements': '', 'job_type': '', 'experience_level': '',
+                'salary': '', 'company_profile': '',
+                'job_portal': 'naukri.com', 'url': url,
                 'error': error_msg
             }
         finally:
@@ -80,6 +105,62 @@ class NaukriScraper(BaseScraper):
                     driver.quit()
                 except:
                     pass
+
+    def _scrape_with_requests(self, url):
+        """Scrape Naukri using requests/BeautifulSoup + JSON-LD"""
+        response = requests.get(url, headers=self.headers, timeout=self.timeout)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        data = {}
+        
+        # Try JSON-LD structured data first (most reliable)
+        for script in soup.find_all('script', type='application/ld+json'):
+            try:
+                json_content = script.string
+                if json_content and 'JobPosting' in json_content:
+                    job_json = json.loads(json_content)
+                    data['title'] = job_json.get('title', '')
+                    org = job_json.get('hiringOrganization', {})
+                    if isinstance(org, dict):
+                        data['company'] = org.get('name', '')
+                        data['company_domain'] = org.get('sameAs', '')
+                    loc = job_json.get('jobLocation', {})
+                    if isinstance(loc, dict) and 'address' in loc:
+                        addr = loc.get('address', {})
+                        if isinstance(addr, dict):
+                            parts = [addr.get('addressLocality', ''), addr.get('addressRegion', '')]
+                            data['location'] = ', '.join(p for p in parts if p)
+                    data['description'] = job_json.get('description', '')
+                    data['job_type'] = job_json.get('employmentType', '')
+                    break
+            except:
+                continue
+        
+        # Supplement with HTML selectors
+        if not data.get('title'):
+            h1 = soup.find('h1')
+            if h1:
+                data['title'] = h1.get_text(strip=True)
+        
+        if not data.get('description'):
+            for sel in [{'class_': re.compile(r'desc')}, {'class_': re.compile(r'job-description')}]:
+                tag = soup.find('div', **sel)
+                if tag:
+                    data['description'] = tag.get_text(separator='\n', strip=True)
+                    break
+        
+        return {
+            'title': data.get('title', 'Unknown Job Title'),
+            'company': data.get('company', 'Unknown Company'),
+            'company_domain': data.get('company_domain', ''),
+            'location': data.get('location', 'Not Specified'),
+            'description': data.get('description', ''),
+            'requirements': '', 'job_type': data.get('job_type', ''),
+            'experience_level': '', 'salary': '',
+            'company_profile': '',
+            'job_portal': 'naukri.com', 'url': url
+        }
 
     def _extract_from_json_ld(self, driver):
         """Extract job data from JSON-LD structured data"""
