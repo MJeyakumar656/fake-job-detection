@@ -63,7 +63,10 @@ class NaukriScraper(BaseScraper):
             time.sleep(3)
             
             # Scroll down to trigger lazy loading
-            driver.execute_script("window.scrollTo(0, 500);")
+            try:
+                driver.execute_script("window.scrollTo(0, 500);")
+            except Exception:
+                pass
             time.sleep(2)
             
             # Wait for page to load

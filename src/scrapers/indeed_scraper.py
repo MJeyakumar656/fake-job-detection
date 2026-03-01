@@ -96,6 +96,10 @@ class IndeedScraper(BaseScraper):
     
     def scrape_with_selenium(self, url):
         """Scrape Indeed using Selenium (original method)"""
+        import os
+        if os.environ.get('RENDER'):
+            raise Exception("Indeed scraping exceeds server memory limits on this free tier. Please click 'Text/Description' and paste the job description instead.")
+            
         driver = self.init_selenium_driver()
         try:
             driver.get(url)

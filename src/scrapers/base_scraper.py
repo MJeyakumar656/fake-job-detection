@@ -192,4 +192,8 @@ class BaseScraper(ABC):
         if not description or len(description) < 50:
             return False
             
+        # Reject if we accidentally just scraped the No-JS boilerplate warning
+        if 'browser does not support Javascript' in description or 'does not support Javascript' in description:
+            return False
+            
         return True
