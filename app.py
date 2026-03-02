@@ -37,11 +37,6 @@ app.register_blueprint(api_bp)
 @app.after_request
 def add_headers(response):
     """Add security and CORS headers to all responses."""
-    # CORS headers (ensure cross-origin requests work)
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
-    
     # Security headers
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'

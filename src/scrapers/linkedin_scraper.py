@@ -115,10 +115,16 @@ class LinkedInScraper(BaseScraper):
         # Fallback to requests (always available)
         try:
             job_data = self._scrape_with_requests(url)
-            if job_data and self.validate_job_data(job_data):
-                return job_data
-        except:
-            pass
+            if job_data:
+                # Accept partial data from LinkedIn - don't require full validation
+                desc = job_data.get('description', '')
+                if desc and desc != 'No description available' and len(desc) > 30:
+                    print(f"✅ Got LinkedIn job data via requests fallback ({len(desc)} chars)")
+                    return job_data
+                elif self.validate_job_data(job_data):
+                    return job_data
+        except Exception as req_err:
+            print(f"❌ Requests fallback also failed: {str(req_err)}")
             
         raise Exception(
             "Anti-Bot Protection Detected: LinkedIn blocks automated scanners. "
@@ -548,7 +554,7 @@ class LinkedInScraper(BaseScraper):
                 proxy_url = 'https://api.scraperapi.com/?' + urlencode(payload)
                 response = requests.get(proxy_url, timeout=45)
             else:
-                response = requests.get(url, headers=headers, timeout=15)
+                response = requests.get(url, headers=self.headers, timeout=15)
                 
             response.raise_for_status()
 
@@ -720,11 +726,8 @@ class LinkedInScraper(BaseScraper):
                                     'developer', 'intern', 'html', 'css', 'javascript', 'react', 'angular', 'vue'
                                 ]) and
                                 not any(skip in text.lower() for skip in [
-                                    'apply', 'save', 'share', 'report', 'show more jobs',
-                                    'sign in', 'sign up', 'join now', 'linkedin',
-                                    'frontend developer', 'back end', 'data scientist',
-                                    'wipro', 'cisco', 'unacademy', 'zee', 'bangalore', 'india',
-                                    '2 weeks ago', '3 days ago', '5–8 years', 'sde ii', 'sde iii'
+                                    'show more jobs', 'sign in', 'sign up', 'join now',
+                                    'people also viewed', 'similar jobs'
                                 ])):
                                 job_data['description'] = text
                                 print("✅ Found substantial job description content in container")
