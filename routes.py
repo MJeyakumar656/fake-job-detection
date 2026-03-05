@@ -170,9 +170,27 @@ def analyze_job():
 
         logger.info(f"Analyzing job - Type: {input_type}, Length: {len(job_input)}, Portal: {validation_result.get('portal', 'N/A')}")
 
-        # Analyze based on input type
+        # Analyze based on input type - with error handling for URL scraping
         if input_type == 'url':
-            result = analyzer.analyze_from_url(job_input)
+            try:
+                result = analyzer.analyze_from_url(job_input)
+            except Exception as url_error:
+                error_msg = str(url_error)
+                logger.error(f"URL scraping failed: {error_msg}")
+                if '403' in error_msg or 'forbidden' in error_msg or 'blocks' in error_msg.lower():
+                    return jsonify({
+                        'error': f"Could not scrape the job URL directly. {error_msg}",
+                        'suggestion': 'Please click the Text/Description tab and manually paste the job description.',
+                        'success': False,
+                        'fallback': 'text_input_required'
+                    }), 400
+                else:
+                    return jsonify({
+                        'error': f"Failed to analyze URL: {error_msg}",
+                        'suggestion': 'Please try pasting the job description text directly instead.',
+                        'success': False,
+                        'fallback': 'text_input_required'
+                    }), 400
         else:
             result = analyzer.analyze_from_text(job_input)
 

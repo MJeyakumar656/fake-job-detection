@@ -1,13 +1,9 @@
-from src.scrapers.base_scraper import BaseScraper, SELENIUM_AVAILABLE
+from src.scrapers.base_scraper import BaseScraper
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 import time
 import re
-import requests
-from bs4 import BeautifulSoup
-
-if SELENIUM_AVAILABLE:
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
 
 class InternshalaScraper(BaseScraper):
     """Scraper for Internshala.com job postings"""
@@ -19,135 +15,29 @@ class InternshalaScraper(BaseScraper):
         if 'internshala.com' not in url:
             raise Exception("Invalid Internshala URL")
 
-        # Try requests-based scraping first
-        try:
-            job_data = self._scrape_with_requests(url)
-            if self.validate_job_data(job_data):
-                print("✅ Successfully scraped Internshala job via requests")
-                return job_data
-            print("⚠️ Requests scraping returned incomplete data")
-        except Exception as e:
-            print(f"⚠️ Requests scraping failed: {str(e)}")
-
-        if not SELENIUM_AVAILABLE:
-            try:
-                job_data = self._scrape_with_requests(url)
-                if job_data and self.validate_job_data(job_data):
-                    return job_data
-            except:
-                pass
-                
-            raise Exception(
-                "Anti-Bot Protection Detected: Internshala blocks automated scanners. "
-                "Please click the 'Text/Description' tab above and manually paste the job description to analyze it."
-            )
-
         try:
             driver = self.init_selenium_driver()
-            driver.set_page_load_timeout(45)
-            driver.set_script_timeout(30)
+            driver.get(url)
+
+            # Wait for page to load - try multiple possible selectors
             try:
-                driver.get(url)
-            except Exception as e:
-                if 'timeout' in str(e).lower():
-                    print("Page load timeout, continuing...")
-                else:
-                    raise
-            
-            try:
-                WebDriverWait(driver, 25).until(
-                    lambda d: d.find_element(By.CSS_SELECTOR, "h1, .heading-title, .job-title, .internship-title, .job-heading, body")
+                WebDriverWait(driver, 15).until(
+                    lambda d: d.find_element(By.CSS_SELECTOR, "h1, .heading-title, .job-title, .internship-title")
                 )
             except:
-                time.sleep(5)
+                # If page doesn't load properly, still try to extract what we can
+                pass
 
             job_data = self._extract_job_data(driver, url)
             driver.quit()
 
             if not self.validate_job_data(job_data):
-                raise Exception(
-                    "Anti-Bot Protection Detected: Internshala blocks automated scanners. "
-                    "Please click the 'Text/Description' tab above and manually paste the job description to analyze it."
-                )
+                raise Exception("Failed to extract complete job data")
 
             return job_data
 
         except Exception as e:
-            if "Anti-Bot Protection Detected" in str(e):
-                raise
             raise Exception(f"Internshala scraping error: {str(e)}")
-
-    def _scrape_with_requests(self, url):
-        """Scrape Internshala using requests/BeautifulSoup (with optional ScraperAPI)"""
-        import os
-        api_key = os.environ.get('SCRAPER_API_KEY')
-        if api_key:
-            from urllib.parse import urlencode
-            payload = {'api_key': api_key, 'url': url, 'render_js': 'true'}
-            proxy_url = 'https://api.scraperapi.com/?' + urlencode(payload)
-            response = requests.get(proxy_url, timeout=45)
-        else:
-            response = requests.get(url, headers=self.headers, timeout=self.timeout)
-            
-        response.raise_for_status()
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        # Extract title
-        title = ""
-        h1 = soup.find('h1')
-        if h1:
-            title = h1.get_text(strip=True)
-        
-        # Extract company
-        company = ""
-        company_domain = ""
-        for sel in ['a.company-link', '.company-name', '.employer-name']:
-            tag = soup.select_one(sel)
-            if tag and tag.get_text(strip=True):
-                company = tag.get_text(strip=True)
-                href = tag.get('href', '')
-                if href and 'internshala.com' not in href:
-                    company_domain = self.extract_domain_from_url(href)
-                break
-        
-        if not company:
-            company, company_domain = self._extract_company_from_url(url)
-        
-        # Extract location
-        location = ""
-        for sel in ['.location-text', '.location-link', '.job-location', '.location']:
-            tag = soup.select_one(sel)
-            if tag and tag.get_text(strip=True):
-                location = tag.get_text(strip=True)
-                break
-        if not location:
-            location = self._extract_location_from_url(url)
-        
-        # Extract description
-        description = ""
-        for sel in ['.job-description', '.description', '#job-description', '.internship-details']:
-            tag = soup.select_one(sel)
-            if tag:
-                description = tag.get_text(separator='\n', strip=True)
-                break
-        
-        if not description:
-            # Fallback: get page text and extract relevant sections
-            for tag in soup(['script', 'style', 'nav', 'footer', 'header']):
-                tag.decompose()
-            text = soup.get_text(separator='\n', strip=True)
-            description = text[:3000] if text else ''
-        
-        return {
-            'title': title or 'Unknown Job Title',
-            'company': company or 'Unknown Company',
-            'company_domain': company_domain or self._extract_domain_from_url_fallback(url),
-            'location': location or 'Not Specified',
-            'description': description,
-            'requirements': '', 'salary': '',
-            'job_type': 'Internship',
-            'job_portal': 'internshala.com', 'url': url
-        }
 
     def _extract_job_data(self, driver, url):
         """Extract job details from Internshala page"""

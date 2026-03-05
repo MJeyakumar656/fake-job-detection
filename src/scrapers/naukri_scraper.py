@@ -1,14 +1,9 @@
-from src.scrapers.base_scraper import BaseScraper, SELENIUM_AVAILABLE
+from src.scrapers.base_scraper import BaseScraper
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 import time
 import re
-import requests
-from bs4 import BeautifulSoup
-import json
-
-if SELENIUM_AVAILABLE:
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
 
 class NaukriScraper(BaseScraper):
     """Scraper for Naukri.com job postings"""
@@ -20,30 +15,6 @@ class NaukriScraper(BaseScraper):
         if 'naukri.com' not in url:
             raise Exception("Invalid Naukri URL")
 
-        # Try requests-based scraping first (works everywhere including Render)
-        try:
-            job_data = self._scrape_with_requests(url)
-            if self.validate_job_data(job_data):
-                print("✅ Successfully scraped Naukri job via requests")
-                return job_data
-            print("⚠️ Requests scraping returned incomplete data")
-        except Exception as e:
-            print(f"⚠️ Requests scraping failed: {str(e)}")
-
-        # Try Selenium if available
-        if not SELENIUM_AVAILABLE:
-            try:
-                job_data = self._scrape_with_requests(url)
-                if job_data and self.validate_job_data(job_data):
-                    return job_data
-            except:
-                pass
-                
-            raise Exception(
-                "Anti-Bot Protection Detected: Naukri blocks automated scanners. "
-                "Please click the 'Text/Description' tab above and manually paste the job description to analyze it."
-            )
-
         driver = None
         try:
             driver = self.init_selenium_driver()
@@ -54,35 +25,22 @@ class NaukriScraper(BaseScraper):
             })
 
             driver.get(url)
-            
-            # Wait for page to fully load
-            time.sleep(3)
-            
-            # Scroll down to trigger lazy loading
+
+            # Wait for page to load - try multiple possible selectors with longer timeout
             try:
-                driver.execute_script("window.scrollTo(0, 500);")
-            except Exception:
-                pass
-            time.sleep(2)
-            
-            # Wait for page to load
-            try:
-                WebDriverWait(driver, 30).until(
+                WebDriverWait(driver, 20).until(
                     lambda d: d.find_element(By.CSS_SELECTOR, "h1, .job-title, .jd-header-title, .jobTitle, body")
                 )
             except:
-                time.sleep(5)
+                # If page doesn't load properly, still try to extract what we can
+                time.sleep(5)  # Give extra time for dynamic content
                 print("⚠️ Page load timeout, attempting extraction anyway...")
 
-            time.sleep(3)
-            
             job_data = self._extract_job_data(driver, url)
 
             if not self.validate_job_data(job_data):
-                raise Exception(
-                    "Anti-Bot Protection Detected: Naukri blocks automated scanners. "
-                    "Please click the 'Text/Description' tab above and manually paste the job description to analyze it."
-                )
+                print("⚠️ Validation failed, but returning partial data")
+                # Don't raise exception, return what we have
 
             return job_data
 
@@ -90,15 +48,20 @@ class NaukriScraper(BaseScraper):
             error_msg = f"Naukri scraping error: {str(e)}"
             print(f"❌ {error_msg}")
 
+            # Return minimal data instead of failing completely
             return {
                 'title': 'Unable to extract title',
                 'company': 'Unable to extract company',
                 'company_domain': '',
                 'location': 'Unable to extract location',
                 'description': f'Error: {error_msg}',
-                'requirements': '', 'job_type': '', 'experience_level': '',
-                'salary': '', 'company_profile': '',
-                'job_portal': 'naukri.com', 'url': url,
+                'requirements': '',
+                'job_type': '',
+                'experience_level': '',
+                'salary': '',
+                'company_profile': '',
+                'job_portal': 'naukri.com',
+                'url': url,
                 'error': error_msg
             }
         finally:
@@ -107,232 +70,91 @@ class NaukriScraper(BaseScraper):
                     driver.quit()
                 except:
                     pass
-
-    def _scrape_with_requests(self, url):
-        """Scrape Naukri using requests/BeautifulSoup + JSON-LD (with optional ScraperAPI)"""
-        import os
-        api_key = os.environ.get('SCRAPER_API_KEY')
-        if api_key:
-            from urllib.parse import urlencode
-            payload = {'api_key': api_key, 'url': url, 'render_js': 'true'}
-            proxy_url = 'https://api.scraperapi.com/?' + urlencode(payload)
-            response = requests.get(proxy_url, timeout=45)
-        else:
-            response = requests.get(url, headers=self.headers, timeout=self.timeout)
-            
-        response.raise_for_status()
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        data = {}
-        
-        # Try JSON-LD structured data first (most reliable)
-        for script in soup.find_all('script', type='application/ld+json'):
-            try:
-                json_content = script.string
-                if json_content and 'JobPosting' in json_content:
-                    job_json = json.loads(json_content)
-                    data['title'] = job_json.get('title', '')
-                    org = job_json.get('hiringOrganization', {})
-                    if isinstance(org, dict):
-                        data['company'] = org.get('name', '')
-                        data['company_domain'] = org.get('sameAs', '')
-                    loc = job_json.get('jobLocation', {})
-                    if isinstance(loc, dict) and 'address' in loc:
-                        addr = loc.get('address', {})
-                        if isinstance(addr, dict):
-                            parts = [addr.get('addressLocality', ''), addr.get('addressRegion', '')]
-                            data['location'] = ', '.join(p for p in parts if p)
-                    data['description'] = job_json.get('description', '')
-                    data['job_type'] = job_json.get('employmentType', '')
-                    break
-            except:
-                continue
-        
-        # Supplement with HTML selectors
-        if not data.get('title'):
-            h1 = soup.find('h1')
-            if h1:
-                data['title'] = h1.get_text(strip=True)
-        
-        if not data.get('description'):
-            for sel in [{'class_': re.compile(r'desc')}, {'class_': re.compile(r'job-description')}]:
-                tag = soup.find('div', **sel)
-                if tag:
-                    data['description'] = tag.get_text(separator='\n', strip=True)
-                    break
-        
-        return {
-            'title': data.get('title', 'Unknown Job Title'),
-            'company': data.get('company', 'Unknown Company'),
-            'company_domain': data.get('company_domain', ''),
-            'location': data.get('location', 'Not Specified'),
-            'description': data.get('description', ''),
-            'requirements': '', 'job_type': data.get('job_type', ''),
-            'experience_level': '', 'salary': '',
-            'company_profile': '',
-            'job_portal': 'naukri.com', 'url': url
-        }
-
-    def _extract_from_json_ld(self, driver):
-        """Extract job data from JSON-LD structured data"""
-        data = {}
-        try:
-            # Find all script tags with type application/ld+json
-            scripts = driver.find_elements(By.CSS_SELECTOR, "script[type='application/ld+json']")
-            
-            for script in scripts:
-                try:
-                    json_content = script.get_attribute('innerHTML')
-                    if json_content and 'JobPosting' in json_content:
-                        import json
-                        job_data = json.loads(json_content)
-                        
-                        # Extract title
-                        if 'title' in job_data:
-                            data['title'] = job_data.get('title', '')
-                        
-                        # Extract company name
-                        if 'hiringOrganization' in job_data:
-                            org = job_data.get('hiringOrganization', {})
-                            if isinstance(org, dict):
-                                data['company'] = org.get('name', '')
-                                if 'sameAs' in org:
-                                    data['company_domain'] = org.get('sameAs', '')
-                                
-                        # Extract location
-                        if 'jobLocation' in job_data:
-                            loc = job_data.get('jobLocation', {})
-                            if isinstance(loc, dict) and 'address' in loc:
-                                address = loc.get('address', {})
-                                if isinstance(address, dict):
-                                    locality = address.get('addressLocality', '')
-                                    region = address.get('addressRegion', '')
-                                    if locality or region:
-                                        location_parts = [p for p in [locality, region] if p]
-                                        data['location'] = ', '.join(location_parts)
-                                
-                        # Extract description
-                        if 'description' in job_data:
-                            data['description'] = job_data.get('description', '')
-                            
-                        # Extract experience
-                        if 'experienceRequirements' in job_data:
-                            exp = job_data.get('experienceRequirements', {})
-                            if isinstance(exp, dict):
-                                data['experience'] = exp.get('monthsOfExperience', '')
-                                
-                        # Extract employment type
-                        if 'employmentType' in job_data:
-                            data['job_type'] = job_data.get('employmentType', '')
-                            
-                        # Extract salary
-                        if 'baseSalary' in job_data:
-                            salary = job_data.get('baseSalary', {})
-                            if isinstance(salary, dict):
-                                value = salary.get('value', {})
-                                if isinstance(value, dict):
-                                    data['salary'] = f"{value.get('value', '')} {value.get('unitText', '')}"
-                        
-                        break
-                except Exception as e:
-                    print(f"⚠️ Error parsing JSON-LD: {str(e)}")
-                    continue
-                    
-        except Exception as e:
-            print(f"⚠️ Error extracting JSON-LD: {str(e)}")
-            
-        return data
     
     def _extract_job_data(self, driver, url):
         """Extract job details from Naukri page"""
         try:
-            # First, try to extract from JSON-LD structured data
-            json_ld_data = self._extract_from_json_ld(driver)
-            
             # Job title - try multiple selectors
-            title = json_ld_data.get('title', '')
-            if not title:
-                title_selectors = [
-                    "h1.styles_jd-header-title__rZwM1",  # Found working selector
-                    "h1",
-                    "h1.jd-header-title",
-                    "h1.job-title",
-                    ".job-title",
-                    "[data-testid='job-title']",
-                    ".jd-header-title",
-                    ".jobTitle",
-                    ".job_title",
-                    "[class*='title']"
-                ]
+            title = ""
+            title_selectors = [
+                "h1.styles_jd-header-title__rZwM1",  # Found working selector
+                "h1",
+                "h1.jd-header-title",
+                "h1.job-title",
+                ".job-title",
+                "[data-testid='job-title']",
+                ".jd-header-title",
+                ".jobTitle",
+                ".job_title",
+                "[class*='title']"
+            ]
 
-                for selector in title_selectors:
-                    try:
-                        title_elem = driver.find_element(By.CSS_SELECTOR, selector)
-                        if title_elem and title_elem.text.strip():
-                            title = title_elem.text.strip()
-                            break
-                    except:
-                        continue
+            for selector in title_selectors:
+                try:
+                    title_elem = driver.find_element(By.CSS_SELECTOR, selector)
+                    if title_elem and title_elem.text.strip():
+                        title = title_elem.text.strip()
+                        break
+                except:
+                    continue
 
             # Company name and link - try multiple selectors
-            company = json_ld_data.get('company', '')
-            company_domain = json_ld_data.get('company_domain', '')
-            if not company:
-                company_selectors = [
-                    "div.styles_jd-header-comp-name__MvqAI a",  # Found working selector
-                    "[class*='company']",
-                    "a.comp-name",
-                    "a.company-name",
-                    "div.company-name a",
-                    ".company-name a",
-                    ".comp-name",
-                    "[data-testid='company-name'] a",
-                    ".companyName a",
-                    ".employer a",
-                    "a[href*='company']"
-                ]
+            company = ""
+            company_domain = ""
+            company_selectors = [
+                "div.styles_jd-header-comp-name__MvqAI a",  # Found working selector
+                "[class*='company']",
+                "a.comp-name",
+                "a.company-name",
+                "div.company-name a",
+                ".company-name a",
+                ".comp-name",
+                "[data-testid='company-name'] a",
+                ".companyName a",
+                ".employer a",
+                "a[href*='company']"
+            ]
 
-                for selector in company_selectors:
-                    try:
-                        company_elem = driver.find_element(By.CSS_SELECTOR, selector)
-                        if company_elem and company_elem.text.strip():
-                            company_text = company_elem.text.strip()
-                            # Skip if it looks like a URL
-                            if 'naukri.com' in company_text.lower() or company_text.startswith('http'):
-                                continue
-                            company = company_text
-                            company_link = company_elem.get_attribute("href")
-                            if company_link and 'naukri.com' not in company_link:
-                                company_domain = self.extract_domain_from_url(company_link)
-                            break
-                    except:
-                        continue
+            for selector in company_selectors:
+                try:
+                    company_elem = driver.find_element(By.CSS_SELECTOR, selector)
+                    if company_elem and company_elem.text.strip():
+                        company_text = company_elem.text.strip()
+                        # Skip if it looks like a URL
+                        if 'naukri.com' in company_text.lower() or company_text.startswith('http'):
+                            continue
+                        company = company_text
+                        company_link = company_elem.get_attribute("href")
+                        if company_link and 'naukri.com' not in company_link:
+                            company_domain = self.extract_domain_from_url(company_link)
+                        break
+                except:
+                    continue
 
             # Location - try multiple selectors
-            location = json_ld_data.get('location', '')
-            if not location:
-                location_selectors = [
-                    "[class*='location']",  # Found working selector
-                    "[class*='loc']",  # Found working selector
-                    "span.locStd",
-                    "span.location",
-                    "div.location",
-                    ".location",
-                    "[data-testid='location']",
-                    ".job-location",
-                    ".location-text",
-                    ".styles_jhc__loc___Du2H",  # Specific selector from page inspection
-                    ".styles_jhc__location__W_pVs"  # Specific selector from page inspection
-                ]
+            location = ""
+            location_selectors = [
+                "[class*='location']",  # Found working selector
+                "[class*='loc']",  # Found working selector
+                "span.locStd",
+                "span.location",
+                "div.location",
+                ".location",
+                "[data-testid='location']",
+                ".job-location",
+                ".location-text",
+                ".styles_jhc__loc___Du2H",  # Specific selector from page inspection
+                ".styles_jhc__location__W_pVs"  # Specific selector from page inspection
+            ]
 
-                for selector in location_selectors:
-                    try:
-                        location_elem = driver.find_element(By.CSS_SELECTOR, selector)
-                        if location_elem and location_elem.text.strip():
-                            location = location_elem.text.strip()
-                            break
-                    except:
-                        continue
+            for selector in location_selectors:
+                try:
+                    location_elem = driver.find_element(By.CSS_SELECTOR, selector)
+                    if location_elem and location_elem.text.strip():
+                        location = location_elem.text.strip()
+                        break
+                except:
+                    continue
 
             # Fallback: Extract location from URL if not found on page
             if not location:
@@ -358,29 +180,28 @@ class NaukriScraper(BaseScraper):
                         location = 'Remote'
 
             # Description - try multiple selectors
-            description = json_ld_data.get('description', '')
-            if not description:
-                desc_selectors = [
-                    "div.styles_JDC__dang-inner-html__h0K4t",  # Found working selector
-                    "[class*='desc']",
-                    "div.dummyDiv",
-                    "div.job-description",
-                    "div.description",
-                    ".job-description",
-                    "[data-testid='job-description']",
-                    ".jd-desc",
-                    ".jobDesc",
-                    ".job_description"
-                ]
+            description = ""
+            desc_selectors = [
+                "div.styles_JDC__dang-inner-html__h0K4t",  # Found working selector
+                "[class*='desc']",
+                "div.dummyDiv",
+                "div.job-description",
+                "div.description",
+                ".job-description",
+                "[data-testid='job-description']",
+                ".jd-desc",
+                ".jobDesc",
+                ".job_description"
+            ]
 
-                for selector in desc_selectors:
-                    try:
-                        desc_elem = driver.find_element(By.CSS_SELECTOR, selector)
-                        if desc_elem and desc_elem.text.strip():
-                            description = desc_elem.text.strip()
-                            break
-                    except:
-                        continue
+            for selector in desc_selectors:
+                try:
+                    desc_elem = driver.find_element(By.CSS_SELECTOR, selector)
+                    if desc_elem and desc_elem.text.strip():
+                        description = desc_elem.text.strip()
+                        break
+                except:
+                    continue
 
             # Job details
             job_details = self._extract_job_details(driver)
