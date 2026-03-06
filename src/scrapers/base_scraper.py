@@ -68,21 +68,28 @@ class BaseScraper(ABC):
                 print(f"🔄 Proxy configuration detected. Routing scraper through proxy.")
                 chrome_options.add_argument(f'--proxy-server={proxy}')
 
-            # 4. Initialize undetected_chromedriver
+            # Find the actual path to chromium or google-chrome
+            import shutil
+            import os
+            # Try shutil first, then fallback to standard Linux installation paths used by Render
+            browser_path = (
+                shutil.which('chromium') or 
+                shutil.which('chromium-browser') or 
+                shutil.which('google-chrome') or 
+                '/usr/bin/chromium'
+            )
+            
+            if not os.path.exists(browser_path) and browser_path == '/usr/bin/chromium':
+                # Absolute last resort fallback
+                browser_path = '/usr/bin/google-chrome'
+
+            print(f"✅ Setting browser executable path to: {browser_path}")
+            
             driver_kwargs = {
                 "options": chrome_options,
-                "version_main": 120, # Common version
+                "browser_executable_path": browser_path,
+                # Removed version_main so uc can auto-detect the version from the binary
             }
-            
-            # Find the actual path to chromium or google-chrome in the OS
-            import shutil
-            browser_path = shutil.which('chromium') or shutil.which('chromium-browser') or shutil.which('google-chrome')
-            
-            if browser_path:
-                print(f"✅ Found browser executable at: {browser_path}")
-                driver_kwargs['browser_executable_path'] = browser_path
-            else:
-                print("⚠️ Warning: Could not find chromium or google-chrome in system path. Undetected-chromedriver will try to guess.")
 
             driver = uc.Chrome(**driver_kwargs)
 
