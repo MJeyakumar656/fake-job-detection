@@ -69,16 +69,20 @@ class BaseScraper(ABC):
                 chrome_options.add_argument(f'--proxy-server={proxy}')
 
             # 4. Initialize undetected_chromedriver
-            # Note: undetected_chromedriver ignores manual user-agent flags, it handles it automatically
-            # Note: We must specify browser_executable_path for Render Docker environment if available
             driver_kwargs = {
                 "options": chrome_options,
                 "version_main": 120, # Common version
             }
             
-            # If running in linux context (like Render Docker)
-            if os.path.exists('/usr/bin/chromium'):
-                driver_kwargs['browser_executable_path'] = '/usr/bin/chromium'
+            # Find the actual path to chromium or google-chrome in the OS
+            import shutil
+            browser_path = shutil.which('chromium') or shutil.which('chromium-browser') or shutil.which('google-chrome')
+            
+            if browser_path:
+                print(f"✅ Found browser executable at: {browser_path}")
+                driver_kwargs['browser_executable_path'] = browser_path
+            else:
+                print("⚠️ Warning: Could not find chromium or google-chrome in system path. Undetected-chromedriver will try to guess.")
 
             driver = uc.Chrome(**driver_kwargs)
 
