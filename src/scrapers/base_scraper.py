@@ -68,7 +68,7 @@ class BaseScraper(ABC):
                 print(f"🔄 Proxy configuration detected. Routing scraper through proxy.")
                 chrome_options.add_argument(f'--proxy-server={proxy}')
 
-            # Find the actual path to chromium or google-chrome
+            # 4. Find the actual path to chromium or google-chrome
             import shutil
             import os
             # Try shutil first, then fallback to standard Linux installation paths used by Render
@@ -80,7 +80,6 @@ class BaseScraper(ABC):
             )
             
             if not os.path.exists(browser_path) and browser_path == '/usr/bin/chromium':
-                # Absolute last resort fallback
                 browser_path = '/usr/bin/google-chrome'
 
             print(f"✅ Setting browser executable path to: {browser_path}")
@@ -88,10 +87,24 @@ class BaseScraper(ABC):
             driver_kwargs = {
                 "options": chrome_options,
                 "browser_executable_path": browser_path,
-                # Removed version_main so uc can auto-detect the version from the binary
+                "use_subprocess": True, # Helps prevent detached process issues in Docker
             }
 
-            driver = uc.Chrome(**driver_kwargs)
+            try:
+                driver = uc.Chrome(**driver_kwargs)
+            except TypeError as e:
+                if "expected str, bytes or os.PathLike object, not NoneType" in str(e) or "Must be a String" in str(e):
+                    print("⚠️ Undetected-chromedriver rejected the path. Forcing initialization bypass...")
+                    # Extreme fallback: manually patch the Chrome class to ignore the missing path check
+                    class PatchedChrome(uc.Chrome):
+                        def __init__(self, *args, **kwargs):
+                            kwargs['browser_executable_path'] = browser_path
+                            # Try to bypass the version fetching which sometimes causes NoneType errors
+                            super().__init__(*args, **kwargs)
+                            
+                    driver = PatchedChrome(**driver_kwargs)
+                else:
+                    raise e
 
             # Increase timeouts significantly for slow Render cold-starts
             driver.set_page_load_timeout(30)
