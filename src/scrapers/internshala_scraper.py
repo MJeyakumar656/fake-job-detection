@@ -1,240 +1,128 @@
 from src.scrapers.base_scraper import BaseScraper
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-import time
+import json
 import re
+import requests
+from bs4 import BeautifulSoup
 
 class InternshalaScraper(BaseScraper):
     """Scraper for Internshala.com job postings"""
 
     def scrape(self, url):
-        """Scrape Internshala job posting"""
-        print("🔗 Scraping Internshala job posting...")
+        """Scrape Internshala job posting bypassing Selenium"""
+        print("🔗 Scraping Internshala job posting via Requests API...")
 
         if 'internshala.com' not in url:
             raise Exception("Invalid Internshala URL")
 
         try:
-            driver = self.init_selenium_driver()
-            driver.get(url)
-
-            # Wait for page to load - try multiple possible selectors
-            try:
-                WebDriverWait(driver, 15).until(
-                    lambda d: d.find_element(By.CSS_SELECTOR, "h1, .heading-title, .job-title, .internship-title")
-                )
-            except:
-                # If page doesn't load properly, still try to extract what we can
-                pass
-
-            job_data = self._extract_job_data(driver, url)
-            driver.quit()
-
-            if not self.validate_job_data(job_data):
-                raise Exception("Failed to extract complete job data")
-
-            return job_data
-
-        except Exception as e:
-            raise Exception(f"Internshala scraping error: {str(e)}")
-
-    def _extract_job_data(self, driver, url):
-        """Extract job details from Internshala page"""
-        try:
-            # Job title - try multiple selectors (updated for current Internshala structure)
-            title = ""
-            title_selectors = [
-                "h1.heading-title",
-                "h1.job-title",
-                "h1",
-                ".internship-title",
-                ".job-heading",
-                ".heading_title",
-                "[data-testid='job-title']",
-                ".job_title"
-            ]
-
-            for selector in title_selectors:
-                try:
-                    title_elem = driver.find_element(By.CSS_SELECTOR, selector)
-                    if title_elem and title_elem.text.strip():
-                        title = title_elem.text.strip()
-                        break
-                except:
-                    continue
-
-            # Company name - try multiple selectors (updated)
-            company = ""
-            company_domain = ""
-            company_selectors = [
-                "a.company-link",
-                ".company-name a",
-                ".company-name",
-                "span.company-name",
-                ".employer-name",
-                "[data-testid='company-name']",
-                ".company_link",
-                ".employer_name",
-                ".company",
-                "a[href*='company']",
-                ".company_info a",
-                ".employer_info a",
-                "[class*='company'] a",
-                "[class*='employer'] a",
-                ".job-details .company a",
-                ".internship-details .company a"
-            ]
-
-            for selector in company_selectors:
-                try:
-                    company_elem = driver.find_element(By.CSS_SELECTOR, selector)
-                    if company_elem and company_elem.text.strip():
-                        company_text = company_elem.text.strip()
-
-                        # Skip if it looks like a URL or contains internshala.com
-                        if ('internshala.com' in company_text.lower() or
-                            company_text.startswith('http') or
-                            'https://' in company_text or
-                            'www.' in company_text or
-                            company_text.startswith('//') or
-                            'internshala.com' in company_text):
-                            continue
-                        # Skip if it contains the input URL (any part of it)
-                        if url.replace('https://', '').replace('http://', '') in company_text:
-                            continue
-                        # Skip if it looks like a job title (contains job-related keywords)
-                        job_keywords = ['internship', 'developer', 'manager', 'engineer', 'designer', 'analyst', 'consultant', 'specialist', 'coordinator', 'assistant', 'executive', 'officer', 'representative', 'associate', 'marketing', 'content', 'digital', 'e-commerce', 'website', 'ui', 'ux', 'web', 'mobile', 'software', 'data', 'sales']
-                        if any(keyword in company_text.lower() for keyword in job_keywords):
-                            continue
-                        # Skip if it contains common job title patterns or separators
-                        if any(pattern in company_text.lower() for pattern in ['&', 'and', '-', 'at ', 'for ', 'by ', 'with ']):
-                            continue
-                        # Skip if it's too long (likely contains job title)
-                        if len(company_text.split()) > 4:
-                            continue
-                        # Skip if it contains numbers
-                        if any(char.isdigit() for char in company_text):
-                            continue
-                        # Skip if it's too short (likely not a company name)
-                        if len(company_text.strip()) < 2:
-                            continue
-                        # Skip if it contains URL-like patterns
-                        if any(char in company_text for char in ['/', '\\', ':', '?', '#', '=']):
-                            continue
-                        company = company_text
-                        company_link = company_elem.get_attribute("href")
-                        if company_link and 'internshala.com' not in company_link and url not in company_link:
-                            company_domain = self.extract_domain_from_url(company_link)
-                            # Ensure it's not the job portal domain
-                            if company_domain and company_domain != 'internshala.com':
-                                pass  # Keep the domain
-                            else:
-                                company_domain = ""
-                        break
-                except:
-                    continue
-
-            # If no company found on page, extract from URL
-            if not company:
-                company, company_domain = self._extract_company_from_url(url)
-
-            # Location - try multiple selectors (updated)
-            location = ""
-            location_selectors = [
-                "span.location-text",
-                ".location-link",
-                ".job-location",
-                "span.location",
-                ".location",
-                "[data-testid='location']",
-                ".location_text",
-                ".location-name",
-                ".city-name",
-                "[class*='location']",
-                ".internship-location",
-                ".job-location span"
-            ]
-
-            for selector in location_selectors:
-                try:
-                    location_elem = driver.find_element(By.CSS_SELECTOR, selector)
-                    if location_elem and location_elem.text.strip():
-                        location = location_elem.text.strip()
-                        break
-                except:
-                    continue
-
-            # If no location found on page, extract from URL
-            if not location:
-                location = self._extract_location_from_url(url)
-
-            # Description - try multiple selectors (updated)
-            description = ""
-            desc_selectors = [
-                "div.job-description",
-                "div.description",
-                ".job-details",
-                "div#job-description",
-                ".internship-details",
-                "[data-testid='job-description']",
-                ".job_description",
-                ".internship_details"
-            ]
-
-            for selector in desc_selectors:
-                try:
-                    desc_elem = driver.find_element(By.CSS_SELECTOR, selector)
-                    if desc_elem and desc_elem.text.strip():
-                        description = desc_elem.text.strip()
-                        break
-                except:
-                    continue
-
-            # If no description found, try to get page text as fallback
-            if not description:
-                try:
-                    body = driver.find_element(By.TAG_NAME, "body")
-                    page_text = body.text
-                    # Extract relevant sections from page text
-                    lines = page_text.split('\n')
-                    relevant_lines = []
-                    capture = False
-                    for line in lines:
-                        line = line.strip()
-                        if not line:
-                            continue
-                        # Look for sections that might contain job details
-                        if any(keyword in line.lower() for keyword in ['about the internship', 'job description', 'responsibilities', 'requirements']):
-                            capture = True
-                        elif any(keyword in line.lower() for keyword in ['apply now', 'application', 'contact']) and capture:
-                            break
-                        if capture and len(line) > 20:
-                            relevant_lines.append(line)
-                    description = ' '.join(relevant_lines[:10])  # Take first 10 relevant lines
-                except:
-                    pass
-
-            # Job details
-            details = self._extract_details(driver)
+            # 1. Fetch raw HTML using Requests
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+            }
+            
+            response = requests.get(url, headers=headers, timeout=15)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
 
             job_data = {
-                'title': title or "WordPress Developer Internship",
-                'company': company or "CodeTrappers",
-                'company_domain': company_domain or self._extract_domain_from_url_fallback(url),
-                'location': location or "Bangalore",
-                'description': description or "WordPress development internship",
-                'requirements': details.get('skills_required', ''),
-                'salary': details.get('stipend', ''),
+                'title': 'Unknown Job Title',
+                'company': 'Unknown Company',
+                'company_domain': '',
+                'location': 'Not Specified',
+                'description': 'No description available',
+                'requirements': '',
                 'job_type': 'Internship',
+                'experience_level': '',
+                'salary': '',
+                'company_profile': '',
                 'job_portal': 'internshala.com',
                 'url': url
             }
 
+            # 2. Extract Data directly from structured JSON-LD
+            json_ld_scripts = soup.find_all('script', type='application/ld+json')
+            for script in json_ld_scripts:
+                try:
+                    data = json.loads(script.string)
+                    if isinstance(data, dict) and data.get('@type') == 'JobPosting':
+                        if 'title' in data:
+                            job_data['title'] = data['title']
+                        if 'description' in data:
+                            raw_desc = data['description']
+                            clean_desc = BeautifulSoup(raw_desc, "html.parser").get_text(separator="\n").strip()
+                            job_data['description'] = clean_desc
+                        
+                        if 'hiringOrganization' in data:
+                            org = data['hiringOrganization']
+                            if isinstance(org, dict) and 'name' in org:
+                                job_data['company'] = org['name']
+                            if isinstance(org, dict) and 'sameAs' in org:
+                                job_data['company_domain'] = self.extract_domain_from_url(org['sameAs'])
+                                
+                        if 'jobLocation' in data:
+                            loc = data['jobLocation']
+                            if isinstance(loc, dict) and 'address' in loc:
+                                addr = loc['address']
+                                city = addr.get('addressLocality', '')
+                                region = addr.get('addressRegion', '')
+                                job_data['location'] = f"{city}, {region}".strip(', ')
+                                
+                        if 'baseSalary' in data:
+                            salary = data['baseSalary']
+                            if isinstance(salary, dict) and 'value' in salary:
+                                val = salary['value']
+                                if isinstance(val, dict):
+                                    job_data['salary'] = f"{val.get('minValue', '')} - {val.get('maxValue', '')} {val.get('unitText', '')}"
+
+                        break
+                except Exception as e:
+                    continue
+
+            # 3. HTML Fallbacks if JSON-LD is missing
+            if job_data['title'] == 'Unknown Job Title':
+                title_elem = soup.select_one("h1.job-title") or soup.find("h1")
+                if title_elem: job_data['title'] = title_elem.get_text().strip()
+
+            if job_data['company'] == 'Unknown Company':
+                comp_elem = soup.select_one("div.company-name") or soup.select_one("a.company-link")
+                if comp_elem: job_data['company'] = comp_elem.get_text().strip()
+                
+            if job_data['description'] == 'No description available':
+                desc_elem = soup.select_one("div.job-description") or soup.select_one("div.internship_details")
+                if desc_elem: job_data['description'] = desc_elem.get_text(separator="\n").strip()
+
+            if not job_data['company_domain']:
+                job_data['company'], job_data['company_domain'] = self._extract_company_from_url(url)
+
+            if not self.validate_job_data(job_data):
+                print("⚠️ Validation failed, but returning partial requests data")
+
             return job_data
 
         except Exception as e:
-            raise Exception(f"Failed to extract Internshala job data: {str(e)}")
+            error_msg = f"Internshala requests scraping error: {str(e)}"
+            print(f"❌ {error_msg}")
+
+            return {
+                'title': 'Unable to extract title',
+                'company': 'Unable to extract company',
+                'company_domain': '',
+                'location': 'Unable to extract location',
+                'description': f'Error: {error_msg}',
+                'requirements': '',
+                'job_type': '',
+                'experience_level': '',
+                'salary': '',
+                'company_profile': '',
+                'job_portal': 'internshala.com',
+                'url': url,
+                'error': error_msg
+            }
 
     def _extract_company_from_url(self, url):
         """Extract company name and domain from Internshala URL"""
@@ -317,42 +205,4 @@ class InternshalaScraper(BaseScraper):
         except:
             return False
 
-    def _extract_details(self, driver):
-        """Extract additional job details"""
-        details = {}
-        try:
-            # Skills required - try multiple selectors
-            skills_selectors = [
-                "div.skills-container",
-                "div.skills",
-                ".key-skills"
-            ]
 
-            for selector in skills_selectors:
-                try:
-                    skills_elem = driver.find_element(By.CSS_SELECTOR, selector)
-                    if skills_elem and skills_elem.text.strip():
-                        details['skills_required'] = skills_elem.text.strip()
-                        break
-                except:
-                    continue
-
-            # Stipend - try multiple selectors
-            stipend_selectors = [
-                "span.stipend",
-                ".salary",
-                "span.salary"
-            ]
-
-            for selector in stipend_selectors:
-                try:
-                    stipend_elem = driver.find_element(By.CSS_SELECTOR, selector)
-                    if stipend_elem and stipend_elem.text.strip():
-                        details['stipend'] = stipend_elem.text.strip()
-                        break
-                except:
-                    continue
-        except:
-            pass
-
-        return details
