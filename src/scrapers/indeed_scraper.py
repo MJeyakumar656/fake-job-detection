@@ -1,9 +1,8 @@
+from src.scrapers.base_scraper import BaseScraper
 import json
 import re
 import cloudscraper
 import urllib.parse
-import requests
-from bs4 import BeautifulSoup
 import requests
 from bs4 import BeautifulSoup
 
