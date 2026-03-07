@@ -1,6 +1,9 @@
-from src.scrapers.base_scraper import BaseScraper
 import json
 import re
+import cloudscraper
+import urllib.parse
+import requests
+from bs4 import BeautifulSoup
 import requests
 from bs4 import BeautifulSoup
 
@@ -15,22 +18,63 @@ class IndeedScraper(BaseScraper):
             raise Exception("Invalid Indeed URL")
         
         try:
-            # 1. Fetch raw HTML using Requests
-            # Indeed is notorious for blocking standard requests, so we need strong headers
+            # Extract Indeed Job ID (jk parameter)
+            job_id = None
+            if 'vjk=' in url:
+                job_id = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get('vjk', [None])[0]
+            elif 'jk=' in url:
+                job_id = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get('jk', [None])[0]
+
+            job_data = {
+                'title': 'Unknown Job Title',
+                'company': 'Unknown Company',
+                'company_domain': '',
+                'location': 'Not Specified',
+                'description': 'No description available',
+                'job_type': '',
+                'salary': '',
+                'job_portal': 'indeed.com',
+                'url': url
+            }
+
+            scraper = cloudscraper.create_scraper(
+                browser={
+                    'browser': 'chrome',
+                    'platform': 'windows',
+                    'desktop': True
+                }
+            )
+
+            # Attempt Mobile API Bypass first (less strict cloudflare)
+            if job_id:
+                try:
+                    mobile_api_url = f"https://www.indeed.com/m/basecamp/viewjob?viewtype=embedded&jk={job_id}"
+                    headers = {
+                        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36',
+                        'Accept': 'application/json',
+                    }
+                    api_resp = scraper.get(mobile_api_url, headers=headers, timeout=10)
+                    if api_resp.status_code == 200:
+                        data = api_resp.json()
+                        if 'jobTitle' in data: job_data['title'] = data['jobTitle']
+                        if 'companyInfo' in data and 'companyName' in data['companyInfo']: 
+                            job_data['company'] = data['companyInfo']['companyName']
+                        if 'jobDescriptionText' in data:
+                            job_data['description'] = BeautifulSoup(data['jobDescriptionText'], "html.parser").get_text(separator="\n").strip()
+                        
+                        if job_data['title'] != 'Unknown Job Title' and job_data['company'] != 'Unknown Company':
+                            return job_data # Success via mobile API!
+                except Exception:
+                    pass # Fallback to standard cloudscraper HTML
+
+            # 1. Fetch raw HTML using Cloudscraper to bypass Cloudflare blocks
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5',
                 'Connection': 'keep-alive',
-                'Upgrade-Insecure-Requests': '1',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'none',
-                'Sec-Fetch-User': '?1',
-                'Cache-Control': 'max-age=0'
             }
             
-            response = requests.get(url, headers=headers, timeout=15)
+            response = scraper.get(url, headers=headers, timeout=15)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.content, 'html.parser')
@@ -108,20 +152,19 @@ class IndeedScraper(BaseScraper):
             return job_data
             
         except requests.exceptions.HTTPError as e:
-            # Indeed is notorious for throwing 403 Forbidden to block bots. Handle gracefully.
-            if e.response.status_code == 403:
-                error_msg = f"Indeed actively blocked the request (403 Forbidden). Try using a proxy or entering data manually."
+            if e.response.status_code == 403 or e.response.status_code == 429:
+                error_msg = "Indeed is blocking automated scraping (403/429). Please copy and paste the Job Title, Company, and Description manually into the application."
             else:
                 error_msg = f"Indeed requests scraping error: {str(e)}"
                 
             print(f"❌ {error_msg}")
             
             return {
-                'title': 'Unable to extract title',
-                'company': 'Unable to extract company',
+                'title': 'Manual Entry Required',
+                'company': 'Manual Entry Required',
                 'company_domain': '',
-                'location': 'Unable to extract location',
-                'description': f'Error: {error_msg}',
+                'location': 'Manual Entry Required',
+                'description': error_msg,
                 'job_type': '',
                 'salary': '',
                 'job_portal': 'indeed.com',
@@ -129,15 +172,20 @@ class IndeedScraper(BaseScraper):
                 'error': error_msg
             }
         except Exception as e:
-            error_msg = f"Indeed requests scraping error: {str(e)}"
+            # Check for Cloudscraper 403 string error (cloudflare blocking)
+            if "403" in str(e) or "captcha" in str(e).lower():
+                error_msg = "Indeed is blocking automated scraping (Captcha/403). Please copy and paste the Job Title, Company, and Description manually into the application."
+            else:
+                error_msg = f"Indeed requests scraping error: {str(e)}"
+                
             print(f"❌ {error_msg}")
             
             return {
-                'title': 'Unable to extract title',
-                'company': 'Unable to extract company',
+                'title': 'Manual Entry Required',
+                'company': 'Manual Entry Required',
                 'company_domain': '',
-                'location': 'Unable to extract location',
-                'description': f'Error: {error_msg}',
+                'location': 'Manual Entry Required',
+                'description': error_msg,
                 'job_type': '',
                 'salary': '',
                 'job_portal': 'indeed.com',
