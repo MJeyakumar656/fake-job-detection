@@ -52,6 +52,7 @@ class NaukriScraper(BaseScraper):
         except Exception as e:
             print(f"❌ [Tier 2] HTML scraping failed: {e}")
 
+        last_error = ""
         # ---------- Tier 3: Selenium fallback ----------
         try:
             print("🔄 [Tier 3] Trying Selenium fallback...")
@@ -63,11 +64,13 @@ class NaukriScraper(BaseScraper):
                 print("⚠️ [Tier 3] Selenium returned incomplete data")
                 return self._enrich_from_url(result, url)
         except Exception as e:
+            last_error = str(e)
             print(f"❌ [Tier 3] Selenium failed: {e}")
 
         # ---------- All tiers failed — use URL parsing as last resort ----------
         print("⚠️ All network methods failed. Extracting info from URL slug...")
-        result = self._error_result(url, "Could not scrape this job. Please paste the job description manually using the Text tab.")
+        msg = f"Could not scrape this job. Please paste the job description manually using the Text tab.\n\n[Render Debug]: {last_error}"
+        result = self._error_result(url, msg)
         return self._enrich_from_url(result, url)
 
     # ------------------------------------------------------------------ #
