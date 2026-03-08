@@ -84,27 +84,41 @@ class BaseScraper(ABC):
 
             print(f"✅ Setting browser executable path to: {browser_path}")
             
-            driver_kwargs = {
-                "options": chrome_options,
-                "browser_executable_path": browser_path,
-                "use_subprocess": True, # Helps prevent detached process issues in Docker
-            }
-
+            # CRITICAL FIX FOR UNDETECTED CHROMEDRIVER ON RENDER
+            # undetected_chromedriver has a bug where it auto-detects Chrome instead of Chromium 
+            # and throws \"Could not determine browser executable\" if Chrome isn't found,
+            # EVEN IF we pass browser_executable_path via kwargs.
+            # We must monkeypatch uc.find_chrome_executable
+            
+            import undetected_chromedriver.patcher as uc_patcher
+            original_find_chrome = uc_patcher.find_chrome_executable
+            
             try:
-                driver = uc.Chrome(**driver_kwargs)
-            except TypeError as e:
-                if "expected str, bytes or os.PathLike object, not NoneType" in str(e) or "Must be a String" in str(e):
-                    print("⚠️ Undetected-chromedriver rejected the path. Forcing initialization bypass...")
-                    # Extreme fallback: manually patch the Chrome class to ignore the missing path check
-                    class PatchedChrome(uc.Chrome):
-                        def __init__(self, *args, **kwargs):
-                            kwargs['browser_executable_path'] = browser_path
-                            # Try to bypass the version fetching which sometimes causes NoneType errors
-                            super().__init__(*args, **kwargs)
-                            
-                    driver = PatchedChrome(**driver_kwargs)
-                else:
-                    raise e
+                # Force the patcher to always return our detected path
+                uc_patcher.find_chrome_executable = lambda: browser_path
+                
+                driver_kwargs = {
+                    "options": chrome_options,
+                    "browser_executable_path": browser_path,
+                    "use_subprocess": True, # Helps prevent detached process issues in Docker
+                }
+    
+                try:
+                    driver = uc.Chrome(**driver_kwargs)
+                except TypeError as e:
+                    if "expected str, bytes or os.PathLike object, not NoneType" in str(e) or "Must be a String" in str(e):
+                        print("⚠️ Undetected-chromedriver rejected the path. Forcing initialization bypass...")
+                        class PatchedChrome(uc.Chrome):
+                            def __init__(self, *args, **kwargs):
+                                kwargs['browser_executable_path'] = browser_path
+                                super().__init__(*args, **kwargs)
+                                
+                        driver = PatchedChrome(**driver_kwargs)
+                    else:
+                        raise e
+            finally:
+                # Always restore the original function
+                uc_patcher.find_chrome_executable = original_find_chrome
 
             # Increase timeouts significantly for slow Render cold-starts
             driver.set_page_load_timeout(30)
