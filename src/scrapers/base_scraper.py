@@ -71,19 +71,32 @@ class BaseScraper(ABC):
             # 4. Find the actual path to chromium or google-chrome
             import shutil
             import os
-            # Try shutil first, then fallback to standard Linux installation paths used by Render
-            browser_path = (
-                shutil.which('chromium') or 
-                shutil.which('chromium-browser') or 
-                shutil.which('google-chrome') or 
-                '/opt/render/project/.render/chrome/opt/google/chrome/google-chrome' or
-                '/usr/bin/chromium'
-            )
             
-            if not os.path.exists(browser_path) and browser_path == '/usr/bin/chromium':
-                browser_path = '/usr/bin/google-chrome'
-
-            print(f"✅ Setting browser executable path to: {browser_path}")
+            # Possible paths to check (Render custom path, then system defaults)
+            possible_paths = [
+                '/opt/render/project/.render/chrome/opt/google/chrome/google-chrome',
+                shutil.which('chromium'),
+                shutil.which('chromium-browser'),
+                shutil.which('google-chrome'),
+                '/usr/bin/chromium',
+                '/usr/bin/google-chrome'
+            ]
+            
+            # Additional common Windows paths for local testing
+            if os.name == 'nt':
+                possible_paths.extend([
+                    r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+                    r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
+                    r'C:\Program Files\Microsoft\Edge\Application\msedge.exe',
+                    r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
+                ])
+            
+            browser_path = next((p for p in possible_paths if p is not None and os.path.exists(p)), None)
+            
+            if browser_path:
+                print(f"✅ Setting browser executable path to: {browser_path}")
+            else:
+                print(f"⚠️ Could not find browser executable in standard paths, letting undetected_chromedriver auto-detect.")
             
             # CRITICAL FIX FOR UNDETECTED CHROMEDRIVER ON RENDER
             # undetected_chromedriver has a bug where it auto-detects Chrome instead of Chromium 
@@ -94,14 +107,17 @@ class BaseScraper(ABC):
             original_find_chrome = uc.find_chrome_executable
             
             try:
-                # Force the patcher to always return our detected path
-                uc.find_chrome_executable = lambda: browser_path
+                # Force the patcher to always return our detected path if we found one
+                if browser_path:
+                    uc.find_chrome_executable = lambda: browser_path
                 
                 driver_kwargs = {
                     "options": chrome_options,
-                    "browser_executable_path": browser_path,
                     "use_subprocess": True, # Helps prevent detached process issues in Docker
                 }
+                
+                if browser_path:
+                    driver_kwargs["browser_executable_path"] = browser_path
     
                 try:
                     driver = uc.Chrome(**driver_kwargs)
