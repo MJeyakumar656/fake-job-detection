@@ -76,6 +76,7 @@ class BaseScraper(ABC):
                 shutil.which('chromium') or 
                 shutil.which('chromium-browser') or 
                 shutil.which('google-chrome') or 
+                '/opt/render/project/.render/chrome/opt/google/chrome/google-chrome' or
                 '/usr/bin/chromium'
             )
             
