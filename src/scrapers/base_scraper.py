@@ -87,16 +87,15 @@ class BaseScraper(ABC):
             
             # CRITICAL FIX FOR UNDETECTED CHROMEDRIVER ON RENDER
             # undetected_chromedriver has a bug where it auto-detects Chrome instead of Chromium 
-            # and throws \"Could not determine browser executable\" if Chrome isn't found,
+            # and throws "Could not determine browser executable" if Chrome isn't found,
             # EVEN IF we pass browser_executable_path via kwargs.
             # We must monkeypatch uc.find_chrome_executable
             
-            import undetected_chromedriver.patcher as uc_patcher
-            original_find_chrome = uc_patcher.find_chrome_executable
+            original_find_chrome = uc.find_chrome_executable
             
             try:
                 # Force the patcher to always return our detected path
-                uc_patcher.find_chrome_executable = lambda: browser_path
+                uc.find_chrome_executable = lambda: browser_path
                 
                 driver_kwargs = {
                     "options": chrome_options,
@@ -119,7 +118,7 @@ class BaseScraper(ABC):
                         raise e
             finally:
                 # Always restore the original function
-                uc_patcher.find_chrome_executable = original_find_chrome
+                uc.find_chrome_executable = original_find_chrome
 
             # Increase timeouts significantly for slow Render cold-starts
             driver.set_page_load_timeout(30)
