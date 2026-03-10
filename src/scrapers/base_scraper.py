@@ -98,6 +98,33 @@ class BaseScraper(ABC):
             else:
                 print(f"⚠️ Could not find browser executable in standard paths, letting undetected_chromedriver auto-detect.")
             
+            # 5. Detect Chrome major version to prevent ChromeDriver version mismatch
+            import subprocess
+            version_main = None
+            if browser_path:
+                try:
+                    if os.name == 'nt':
+                        # Windows: use wmic or powershell to get version
+                        result = subprocess.run(
+                            ['powershell', '-Command', f'(Get-Item "{browser_path}").VersionInfo.FileVersion'],
+                            capture_output=True, text=True, timeout=5
+                        )
+                    else:
+                        # Linux: run the browser with --version flag
+                        result = subprocess.run(
+                            [browser_path, '--version'],
+                            capture_output=True, text=True, timeout=5
+                        )
+                    
+                    if result.stdout:
+                        import re
+                        version_match = re.search(r'(\d+)\.', result.stdout.strip())
+                        if version_match:
+                            version_main = int(version_match.group(1))
+                            print(f"✅ Detected Chrome major version: {version_main}")
+                except Exception as ver_err:
+                    print(f"⚠️ Could not detect Chrome version: {ver_err}")
+            
             # CRITICAL FIX FOR UNDETECTED CHROMEDRIVER ON RENDER
             # undetected_chromedriver has a bug where it auto-detects Chrome instead of Chromium 
             # and throws "Could not determine browser executable" if Chrome isn't found,
@@ -118,6 +145,10 @@ class BaseScraper(ABC):
                 
                 if browser_path:
                     driver_kwargs["browser_executable_path"] = browser_path
+                
+                # Pass version_main to force correct ChromeDriver version
+                if version_main:
+                    driver_kwargs["version_main"] = version_main
     
                 try:
                     driver = uc.Chrome(**driver_kwargs)
