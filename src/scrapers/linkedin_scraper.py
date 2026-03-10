@@ -46,16 +46,11 @@ class LinkedInScraper(BaseScraper):
             description = job_data.get('description', '')
             if (description and
                 description != 'No description available' and
-                len(description) > 100 and  # Reduced minimum length for more flexibility
-                any(keyword in description.lower() for keyword in [
-                    'about the job', 'responsibilities', 'requirements', 'qualifications',
-                    'position:', 'company description', 'role description', 'what you\'ll do',
-                    'about the company', 'job description', 'role overview', 'key responsibilities',
-                    'required skills', 'what we offer', 'benefits', 'compensation'
-                ]) and
+                len(description) > 100 and  # Must have substantial content
                 not any(skip in description.lower() for skip in [
-                    'be among the first', 'see who', 'no longer accepting', '1 day ago', 'applicants',
-                    'show more jobs', 'similar jobs', 'people also viewed'
+                    'be among the first', 'see who', 'no longer accepting',
+                    'show more jobs', 'similar jobs', 'people also viewed',
+                    'sign in to view', 'join now to see'
                 ])):
                 print("✅ Requests scraping successful with valid description")
                 return job_data
@@ -384,16 +379,12 @@ class LinkedInScraper(BaseScraper):
                         text = elem.text.strip()
                         print(f"📝 Found content with selector '{selector}': {text[:200]}...")
 
-                        # Check if this contains the actual job description content
-                        if (len(text) > 200 and
-                            any(keyword in text.lower() for keyword in [
-                                'about hibiscustech', 'psyplay', 'chess', 'ludo', 'connect 4', 'poker',
-                                'position: full stack product intern', 'frontend learning', 'backend learning',
-                                'what you\'ll learn and build', 'hibiscustech is building', 'ai-powered gaming'
-                            ]) and
+                        # Accept any substantial text from the description container
+                        if (len(text) > 100 and
                             not any(skip in text.lower() for skip in [
-                                'be among the first', 'see who', 'no longer accepting', '1 day ago', 'applicants',
-                                'jobs', 'open jobs', 'show more', 'ago', 'years', '₹', '$'
+                                'be among the first', 'see who', 'no longer accepting',
+                                'show more jobs', 'similar jobs', 'people also viewed',
+                                'sign in to view', 'join now to see'
                             ])):
                             description = text
                             print(f"✅ Selected job description: {text[:300]}...")

@@ -168,8 +168,8 @@ class BaseScraper(ABC):
                 uc.find_chrome_executable = original_find_chrome
 
             # Increase timeouts significantly for slow Render cold-starts
-            driver.set_page_load_timeout(30)
-            driver.set_script_timeout(30)
+            driver.set_page_load_timeout(60)
+            driver.set_script_timeout(60)
             return driver
         except Exception as e:
             raise Exception(f"Failed to initialize Selenium: {str(e)}")
