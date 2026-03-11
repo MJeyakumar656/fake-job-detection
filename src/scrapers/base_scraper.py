@@ -65,10 +65,6 @@ class BaseScraper(ABC):
             chrome_options.add_argument("--disable-blink-features")
             chrome_options.add_argument("--disable-blink-features=AutomationControlled")
             
-            # Hide automation infobars and flags
-            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            chrome_options.add_experimental_option("useAutomationExtension", False)
-            
             # General security bypasses (often needed for stubborn sites)
             chrome_options.add_argument("--disable-web-security")
             chrome_options.add_argument("--allow-running-insecure-content")
