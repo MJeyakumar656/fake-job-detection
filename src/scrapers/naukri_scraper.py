@@ -292,6 +292,10 @@ class NaukriScraper(BaseScraper):
         try:
             driver = self.init_selenium_driver()
             driver.get(url)
+            
+            # CRITICAL: Wait for Cloudflare/antibot JS challenge to resolve
+            print("  ⏳ Waiting for potential Cloudflare challenge to resolve...")
+            time.sleep(5)
 
             # Wait for key content to render
             try:

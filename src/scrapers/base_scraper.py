@@ -57,11 +57,21 @@ class BaseScraper(ABC):
             chrome_options.add_argument("--no-first-run")
             chrome_options.add_argument("--window-size=1280,720") # Smaller window = less memory
 
-            # 2. Enhanced anti-detection measures (mostly handled by undetected_chromedriver natively)
+            # 2. Enhanced anti-detection measures
+            # Realistic User Agent
+            chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            
+            # Disable blink features that reveal automation
+            chrome_options.add_argument("--disable-blink-features")
+            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+            
+            # Hide automation infobars and flags
+            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            chrome_options.add_experimental_option("useAutomationExtension", False)
+            
+            # General security bypasses (often needed for stubborn sites)
             chrome_options.add_argument("--disable-web-security")
             chrome_options.add_argument("--allow-running-insecure-content")
-            
-            # 3. Proxy Configuration (Load from Environment Variables)
             import os
             proxy = os.getenv('SCRAPER_PROXY')
             if proxy:
@@ -170,6 +180,19 @@ class BaseScraper(ABC):
             # Increase timeouts significantly for slow Render cold-starts
             driver.set_page_load_timeout(60)
             driver.set_script_timeout(60)
+            
+            # Execute CDP commands to hide webdriver flag effectively
+            try:
+                driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+                    "source": """
+                        Object.defineProperty(navigator, 'webdriver', {
+                            get: () => undefined
+                        })
+                    """
+                })
+            except Exception as e:
+                print(f"⚠️ Could not execute CDP command: {e}")
+                
             return driver
         except Exception as e:
             raise Exception(f"Failed to initialize Selenium: {str(e)}")
