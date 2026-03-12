@@ -43,7 +43,7 @@ class BaseScraper(ABC):
             # 1. Extreme Memory Saving Flags (Essential for Render's 512MB RAM limit)
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
-            chrome_options.add_argument("--disable-gpu")
+            chrome_options.add_argument("--disable-gpu") # Important for timeout fix
             chrome_options.add_argument("--single-process") # Forces single process
             chrome_options.add_argument("--js-flags=--max-old-space-size=256") # Limit JS engine memory
             chrome_options.add_argument("--disable-software-rasterizer")
@@ -189,6 +189,23 @@ class BaseScraper(ABC):
             except Exception as e:
                 print(f"⚠️ Could not execute CDP command: {e}")
                 
+            # FIX FOR WINDOWS: undetected_chromedriver __del__ method throws WinError 6
+            # when trying to kill the process group if it's already dead.
+            # We monkeypatch the driver's __del__ method to ignore this specific error.
+            if os.name == 'nt':
+                original_del = getattr(driver.__class__, '__del__', None)
+                if original_del:
+                    def safe_del(self):
+                        try:
+                            original_del(self)
+                        except OSError as e:
+                            # Ignore WinError 6 (The handle is invalid)
+                            if getattr(e, 'winerror', None) != 6:
+                                pass
+                        except Exception:
+                            pass
+                    driver.__class__.__del__ = safe_del
+
             return driver
         except Exception as e:
             raise Exception(f"Failed to initialize Selenium: {str(e)}")

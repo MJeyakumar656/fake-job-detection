@@ -71,11 +71,11 @@ class IndeedScraper(BaseScraper):
 
         # ---------- All tiers failed ----------
         print("❌ All scraping methods failed for Indeed")
+        # Return a warning result rather than an outright error
+        # This will still trigger our AI analysis but correctly display a manual action warning
         return self._error_result(
             url,
-            "Indeed is blocking automated scraping. Please copy and paste "
-            "the Job Title, Company, and Description manually using the "
-            "Text/Description tab."
+            "Indeed's security system blocked automation. Please click the 'Text / Description' tab and manually paste the job description to run the AI analysis."
         )
 
     # ------------------------------------------------------------------ #

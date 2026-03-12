@@ -524,26 +524,33 @@ class NaukriScraper(BaseScraper):
                 # Common company suffixes that help identify boundaries
                 company_indicators = {
                     'private', 'limited', 'ltd', 'pvt', 'inc', 'corp', 'llp',
-                    'technologies', 'solutions', 'systems', 'services',
-                    'software', 'infotech', 'consulting', 'labs',
+                    'technologies', 'solutions', 'systems', 'services', 'companies',
+                    'software', 'infotech', 'consulting', 'labs', 'group', 'industries'
                 }
 
                 # Try to find where the company name starts
                 company_start = None
-                for i in range(len(remaining) - 1, max(0, len(remaining) - 5), -1):
+                
+                # First pass: try to find a known suffix, and look backwards for the start
+                for i in range(len(remaining) - 1, max(0, len(remaining) - 6), -1):
                     if remaining[i].lower() in company_indicators:
-                        # Likely part of company name — scan backwards a bit more
-                        company_start = max(0, i - 2)
+                        # Found a suffix (like 'companies' or 'ltd'). Now scan backward to find where it starts
+                        company_start = max(0, i - 1)
+                        # Look for connector words like 'of', 'and', '&'
+                        for j in range(i - 1, max(0, i - 4), -1):
+                            if remaining[j].lower() in {'of', 'and', 'group'}:
+                                company_start = j - 1 # Include the word before the connector
+                        company_start = max(0, company_start)
                         break
 
                 if company_start is not None and company_start > 0:
                     info['title'] = ' '.join(w.capitalize() for w in remaining[:company_start])
                     info['company'] = ' '.join(w.capitalize() for w in remaining[company_start:])
                 elif len(remaining) >= 3:
-                    # Guess: last word/segment is company, rest is title
-                    # Try splitting at the last naturally-capitalizable segment
-                    info['title'] = ' '.join(w.capitalize() for w in remaining[:-1])
-                    info['company'] = remaining[-1].capitalize()
+                    # Guess: last 2 words might be company if no specific indicator found
+                    split_idx = max(1, len(remaining) - 2)
+                    info['title'] = ' '.join(w.capitalize() for w in remaining[:split_idx])
+                    info['company'] = ' '.join(w.capitalize() for w in remaining[split_idx:])
                 else:
                     info['title'] = ' '.join(w.capitalize() for w in remaining)
 
