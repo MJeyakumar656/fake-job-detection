@@ -43,8 +43,17 @@ class BaseScraper(ABC):
             # 1. Extreme Memory Saving Flags (Essential for Render's 512MB RAM limit)
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
-            chrome_options.add_argument("--disable-gpu") # Important for timeout fix
-            chrome_options.add_argument("--single-process") # Forces single process
+            chrome_options.add_argument("--disable-gpu")
+            chrome_options.add_argument("--single-process")
+            chrome_options.add_argument("--disable-browser-side-navigation")
+            chrome_options.add_argument("--disable-infobars")
+            chrome_options.add_argument("--disable-extensions")
+            chrome_options.add_argument("--dns-prefetch-disable")
+            chrome_options.add_argument("--window-size=1920,1080")
+            
+            # Additional flags for uc stability in Docker
+            chrome_options.add_argument("--disable-features=IsolateOrigins,site-per-process")
+            chrome_options.add_argument("--blink-settings=imagesEnabled=false") # Save bandwidth/RAM
             chrome_options.add_argument("--js-flags=--max-old-space-size=256") # Limit JS engine memory
             chrome_options.add_argument("--disable-software-rasterizer")
             chrome_options.add_argument("--disable-extensions")

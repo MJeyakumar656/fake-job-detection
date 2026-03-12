@@ -289,139 +289,138 @@ class NaukriScraper(BaseScraper):
         import time
 
         driver = None
-        try:
-            driver = self.init_selenium_driver()
-            driver.get(url)
-            
-            # CRITICAL: Wait for Cloudflare/antibot JS challenge to resolve
-            print("  ⏳ Waiting for potential Cloudflare challenge to resolve...")
-            time.sleep(5)
+        max_retries = 2
+        last_exception = None
 
-            # Wait for key content to render
+        for attempt in range(max_retries):
             try:
-                WebDriverWait(driver, 15).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR,
-                        "h1, [class*='jd-header-title'], [class*='job-title'], [class*='comp-name']"))
-                )
-            except Exception:
-                print("  ⚠️ Selenium wait timeout, continuing with whatever loaded...")
+                driver = self.init_selenium_driver()
+                
+                # Add a bit of jitter and longer initial timeout
+                driver.set_page_load_timeout(45)
+                driver.get(url)
+                
+                # CRITICAL: Wait for Cloudflare/antibot JS challenge to resolve
+                print(f"  ⏳ Waiting for potential Cloudflare challenge to resolve (Attempt {attempt+1})...")
+                time.sleep(8) # Longer wait for Render
 
-            # Give React a moment to finish rendering
-            time.sleep(3)
-
-            job_data = self._empty_result(url)
-            job_data['url'] = driver.current_url
-
-            # --- Title ---
-            title_selectors = [
-                "h1.jd-header-title",
-                "h1[class*='header-title']",
-                "h1[class*='job-title']",
-                "h1",
-            ]
-            for sel in title_selectors:
+                # Wait for key content to render - be more inclusive
                 try:
-                    elem = driver.find_element(By.CSS_SELECTOR, sel)
-                    if elem.text.strip():
-                        job_data['title'] = elem.text.strip()
-                        break
+                    WebDriverWait(driver, 20).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR,
+                            "h1, [class*='jd-header-title'], [class*='job-title'], [class*='comp-name'], main"))
+                    )
                 except Exception:
-                    continue
+                    print(f"  ⚠️ Selenium wait timeout on attempt {attempt+1}, check if page actually loaded...")
 
-            # --- Company ---
-            company_selectors = [
-                "a[class*='comp-name']",
-                "div[class*='comp-name'] a",
-                "a.comp-name",
-                "div.jd-header-comp-name a",
-            ]
-            for sel in company_selectors:
-                try:
-                    elem = driver.find_element(By.CSS_SELECTOR, sel)
-                    if elem.text.strip():
-                        job_data['company'] = elem.text.strip()
-                        break
-                except Exception:
-                    continue
+                # Give React a moment to finish rendering
+                time.sleep(4)
 
-            # --- Location ---
-            location_selectors = [
-                "span[class*='location']",
-                "div[class*='location']",
-                "a[class*='location']",
-            ]
-            for sel in location_selectors:
-                try:
-                    elem = driver.find_element(By.CSS_SELECTOR, sel)
-                    if elem.text.strip():
-                        job_data['location'] = elem.text.strip()
-                        break
-                except Exception:
-                    continue
+                job_data = self._empty_result(url)
+                job_data['url'] = driver.current_url
 
-            # --- Experience ---
-            experience_selectors = [
-                "span[class*='experience']",
-                "div[class*='experience']",
-            ]
-            for sel in experience_selectors:
-                try:
-                    elem = driver.find_element(By.CSS_SELECTOR, sel)
-                    if elem.text.strip():
-                        job_data['experience_level'] = elem.text.strip()
-                        break
-                except Exception:
-                    continue
+                # --- Title ---
+                title_selectors = ["h1.jd-header-title", "h1[class*='header-title']", "h1[class*='job-title']", "h1"]
+                for sel in title_selectors:
+                    try:
+                        elem = driver.find_element(By.CSS_SELECTOR, sel)
+                        if elem.text.strip():
+                            job_data['title'] = elem.text.strip()
+                            break
+                    except Exception: continue
 
-            # --- Salary ---
-            salary_selectors = [
-                "span[class*='salary']",
-                "div[class*='salary']",
-            ]
-            for sel in salary_selectors:
-                try:
-                    elem = driver.find_element(By.CSS_SELECTOR, sel)
-                    if elem.text.strip():
-                        job_data['salary'] = elem.text.strip()
-                        break
-                except Exception:
-                    continue
+                # --- Company ---
+                company_selectors = ["a[class*='comp-name']", "div[class*='comp-name'] a", "a.comp-name", "div.jd-header-comp-name a"]
+                for sel in company_selectors:
+                    try:
+                        elem = driver.find_element(By.CSS_SELECTOR, sel)
+                        if elem.text.strip():
+                            job_data['company'] = elem.text.strip()
+                            break
+                    except Exception: continue
 
-            # --- Description ---
-            desc_selectors = [
-                "section.job-desc",
-                "div.dang-inner-html",
-                "div[class*='job-desc']",
-                "div[class*='description']",
-                "div[class*='jd-desc']",
-            ]
-            for sel in desc_selectors:
-                try:
-                    elem = driver.find_element(By.CSS_SELECTOR, sel)
-                    if elem.text.strip() and len(elem.text.strip()) > 50:
-                        job_data['description'] = elem.text.strip()
-                        break
-                except Exception:
-                    continue
+                # --- Location ---
+                location_selectors = ["span[class*='location']", "div[class*='location']", "a[class*='location']"]
+                for sel in location_selectors:
+                    try:
+                        elem = driver.find_element(By.CSS_SELECTOR, sel)
+                        if elem.text.strip():
+                            job_data['location'] = elem.text.strip()
+                            break
+                    except Exception: continue
 
-            # If we still have no description, try to get the full page text from the main content area
-            if job_data['description'] == 'No description available':
-                try:
-                    main = driver.find_element(By.CSS_SELECTOR, "main, #root, [class*='job-detail']")
-                    text = main.text.strip()
-                    if len(text) > 200:
-                        job_data['description'] = text
-                except Exception:
-                    pass
+                # --- Experience ---
+                experience_selectors = [
+                    "span[class*='experience']",
+                    "div[class*='experience']",
+                ]
+                for sel in experience_selectors:
+                    try:
+                        elem = driver.find_element(By.CSS_SELECTOR, sel)
+                        if elem.text.strip():
+                            job_data['experience_level'] = elem.text.strip()
+                            break
+                    except Exception:
+                        continue
 
-            return job_data
+                # --- Salary ---
+                salary_selectors = [
+                    "span[class*='salary']",
+                    "div[class*='salary']",
+                ]
+                for sel in salary_selectors:
+                    try:
+                        elem = driver.find_element(By.CSS_SELECTOR, sel)
+                        if elem.text.strip():
+                            job_data['salary'] = elem.text.strip()
+                            break
+                    except Exception:
+                        continue
 
-        finally:
-            if driver:
-                try:
-                    driver.quit()
-                except Exception:
-                    pass
+                # --- Description ---
+                desc_selectors = ["section.job-desc", "div.dang-inner-html", "div[class*='job-desc']", "div[class*='description']", "div[class*='jd-desc']"]
+                for sel in desc_selectors:
+                    try:
+                        elem = driver.find_element(By.CSS_SELECTOR, sel)
+                        if elem.text.strip() and len(elem.text.strip()) > 50:
+                            job_data['description'] = elem.text.strip()
+                            break
+                    except Exception: continue
+
+                # Fallback to full page text if description still missing
+                if job_data['description'] == 'No description available':
+                    try:
+                        main = driver.find_element(By.CSS_SELECTOR, "main, #root, [class*='job-detail']")
+                        text = main.text.strip()
+                        if len(text) > 200:
+                            job_data['description'] = text
+                    except Exception: pass
+
+                # Cleanup description: remove Naukri fraud alert boilerplate
+                if job_data['description'] and 'Beware of imposters' in job_data['description']:
+                    boilerplate_patterns = [
+                        r'Beware of imposters!.*?\.\.\.Read more',
+                        r'Naukri\.com does not promise.*?money\.',
+                        r'Fraudsters may ask you to pay.*?Fee',
+                    ]
+                    for pattern in boilerplate_patterns:
+                        job_data['description'] = re.sub(pattern, '', job_data['description'], flags=re.DOTALL).strip()
+
+                if job_data['title'] != 'Unknown Job Title' or job_data['description'] != 'No description available':
+                    return job_data
+                
+                raise Exception("Page loaded but no content found")
+
+            except Exception as e:
+                last_exception = e
+                print(f"  ❌ Selenium attempt {attempt+1} failed: {str(e)}")
+            finally:
+                if driver:
+                    try:
+                        driver.quit()
+                    except Exception: pass
+
+        raise last_exception or Exception("Selenium scraping failed after retries")
 
     # ------------------------------------------------------------------ #
     #  Helpers

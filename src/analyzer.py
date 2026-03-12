@@ -404,7 +404,13 @@ class JobAnalyzer:
         combined_score = self._fast_prediction(features, red_flags)
 
         # Determine final prediction
-        final_prediction = "FAKE JOB" if combined_score > 0.5 else "GENUINE JOB"
+        is_scrape_failed = "Could not scrape this job" in description
+        
+        if is_scrape_failed:
+            final_prediction = "UNVERIFIED"
+            combined_score = 0.5 # Neutral
+        else:
+            final_prediction = "FAKE JOB" if combined_score > 0.5 else "GENUINE JOB"
 
         # Calculate red flags severity
         red_flags_severity = self._assess_severity(red_flags, combined_score)
