@@ -33,3 +33,11 @@ dataset/
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs and test outputs
+logs/
+*.log
+*.txt
+*.mp4
+*.txt
+*.mp4
