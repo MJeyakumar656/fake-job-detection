@@ -451,6 +451,9 @@ class NaukriScraper(BaseScraper):
     def _error_result(self, url, message):
         """Return an error result with guidance for the user."""
         result = self._empty_result(url)
+        result['title'] = 'Extraction Failed'
+        result['company'] = 'Extraction Failed'
+        result['location'] = 'Extraction Failed'
         result['description'] = message
         result['error'] = message
         return result

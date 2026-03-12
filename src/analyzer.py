@@ -404,7 +404,13 @@ class JobAnalyzer:
         combined_score = self._fast_prediction(features, red_flags)
 
         # Determine final prediction
-        is_scrape_failed = "Could not scrape this job" in description
+        # Expanded check for multiple scraper error/fallback indicators
+        is_scrape_failed = (
+            "Could not scrape this job" in description or 
+            "Indeed's security system blocked automation" in description or
+            job_data.get('title') == "Extraction Failed" or
+            job_data.get('error') is not None
+        )
         
         if is_scrape_failed:
             final_prediction = "UNVERIFIED"

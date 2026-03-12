@@ -10,7 +10,7 @@ const API_BASE_URL = window.location.hostname === 'localhost'
  */
 async function apiRequest(endpoint, options = {}) {
     const url = `${API_BASE_URL}${endpoint}`;
-    const timeout = options.timeout || 120000; // 2 min timeout for Render free tier
+    const timeout = options.timeout || 180000; // 3 min timeout for Render free tier
 
     // Create abort controller for timeout
     const controller = new AbortController();
