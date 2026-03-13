@@ -613,6 +613,10 @@ class JobAnalyzer:
     
     def _assess_job_quality(self, analysis_result, features=None):
         """Enhanced job quality assessment"""
+        
+        # Check for unverified/failed scrapes first
+        if analysis_result.get('final_prediction') == "UNVERIFIED":
+            return "N/A (Extraction Failed)"
 
         confidence = analysis_result['combined_confidence']
         red_flags = analysis_result['red_flags_count']

@@ -99,8 +99,17 @@ function displayResult(result) {
  */
 function displayPredictionBadge(result) {
     const isFake = result.is_fake;
-    const prediction = result.final_prediction || (isFake ? 'FAKE JOB' : 'GENUINE JOB');
     const confidence = result.combined_confidence || result.ai_confidence || 0;
+    
+    // Robust detection of unverified state
+    let prediction = result.final_prediction;
+    if (!prediction) {
+        if (result.description && (result.description.includes('blocked automation') || result.description.includes('Could not scrape'))) {
+            prediction = 'UNVERIFIED';
+        } else {
+            prediction = isFake ? 'FAKE JOB' : 'GENUINE JOB';
+        }
+    }
 
     // Update badge styling
     if (prediction === 'UNVERIFIED') {
