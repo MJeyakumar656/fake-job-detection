@@ -408,7 +408,8 @@ class JobAnalyzer:
         is_scrape_failed = (
             "Could not scrape this job" in description or 
             "Indeed's security system blocked automation" in description or
-            job_data.get('title') == "Extraction Failed" or
+            job_data.get('title') in ("Extraction Failed", "Unknown Job Title") or
+            job_data.get('company') == "Unknown Company" or
             job_data.get('error') is not None
         )
         

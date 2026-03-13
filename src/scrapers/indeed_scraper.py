@@ -63,9 +63,6 @@ class IndeedScraper(BaseScraper):
                 return result
             else:
                 print("⚠️ [Tier 3] Selenium returned incomplete data")
-                # Return whatever we got
-                if result.get('description', 'No description available') != 'No description available':
-                    return result
         except Exception as e:
             print(f"❌ [Tier 3] Selenium failed: {e}")
 
