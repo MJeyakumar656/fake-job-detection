@@ -302,25 +302,31 @@ class NaukriScraper(BaseScraper):
                 
                 # CRITICAL: Wait for Cloudflare/antibot JS challenge to resolve
                 print(f"  ⏳ Waiting for potential Cloudflare challenge to resolve (Attempt {attempt+1})...")
-                time.sleep(8) # Longer wait for Render
+                time.sleep(12) # Increased for Render stability
 
                 # Wait for key content to render - be more inclusive
                 try:
-                    WebDriverWait(driver, 20).until(
+                    WebDriverWait(driver, 30).until(
                         EC.presence_of_element_located((By.CSS_SELECTOR,
-                            "h1, [class*='jd-header-title'], [class*='job-title'], [class*='comp-name'], main"))
+                            "h1, [class*='jd-header-title'], [class*='job-title'], [class*='comp-name'], main, .styles_job-desc__n_0_P"))
                     )
                 except Exception:
                     print(f"  ⚠️ Selenium wait timeout on attempt {attempt+1}, check if page actually loaded...")
 
                 # Give React a moment to finish rendering
-                time.sleep(4)
+                time.sleep(6)
 
                 job_data = self._empty_result(url)
                 job_data['url'] = driver.current_url
 
                 # --- Title ---
-                title_selectors = ["h1.jd-header-title", "h1[class*='header-title']", "h1[class*='job-title']", "h1"]
+                title_selectors = [
+                    "h1.styles_jd-header-title__j_169", 
+                    "h1.jd-header-title", 
+                    "h1[class*='header-title']", 
+                    "h1[class*='job-title']", 
+                    "h1"
+                ]
                 for sel in title_selectors:
                     try:
                         elem = driver.find_element(By.CSS_SELECTOR, sel)
@@ -330,7 +336,14 @@ class NaukriScraper(BaseScraper):
                     except Exception: continue
 
                 # --- Company ---
-                company_selectors = ["a[class*='comp-name']", "div[class*='comp-name'] a", "a.comp-name", "div.jd-header-comp-name a"]
+                company_selectors = [
+                    "a.styles_jd-header-comp-name__M19_L",
+                    "a[title*='Careers']",
+                    "a[class*='comp-name']", 
+                    "div[class*='comp-name'] a", 
+                    "a.comp-name", 
+                    "div.jd-header-comp-name a"
+                ]
                 for sel in company_selectors:
                     try:
                         elem = driver.find_element(By.CSS_SELECTOR, sel)
@@ -340,7 +353,13 @@ class NaukriScraper(BaseScraper):
                     except Exception: continue
 
                 # --- Location ---
-                location_selectors = ["span[class*='location']", "div[class*='location']", "a[class*='location']"]
+                location_selectors = [
+                    "span.styles_jhc__location__W_C_W",
+                    ".location a",
+                    "span[class*='location']", 
+                    "div[class*='location']", 
+                    "a[class*='location']"
+                ]
                 for sel in location_selectors:
                     try:
                         elem = driver.find_element(By.CSS_SELECTOR, sel)
@@ -378,7 +397,14 @@ class NaukriScraper(BaseScraper):
                         continue
 
                 # --- Description ---
-                desc_selectors = ["section.job-desc", "div.dang-inner-html", "div[class*='job-desc']", "div[class*='description']", "div[class*='jd-desc']"]
+                desc_selectors = [
+                    "section.job-desc", 
+                    ".styles_job-desc__n_0_P",
+                    "div.dang-inner-html", 
+                    "div[class*='job-desc']", 
+                    "div[class*='description']", 
+                    "div[class*='jd-desc']"
+                ]
                 for sel in desc_selectors:
                     try:
                         elem = driver.find_element(By.CSS_SELECTOR, sel)

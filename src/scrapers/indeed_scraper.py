@@ -239,18 +239,24 @@ class IndeedScraper(BaseScraper):
             
             # CRITICAL: Wait for Cloudflare/antibot JS challenge to resolve
             print("  ⏳ Waiting for potential Cloudflare challenge to resolve...")
-            time.sleep(5)
+            time.sleep(10) # Increased for Render
+
+            # Detect Cloudflare or block pages immediately
+            page_source = driver.page_source.lower()
+            if "cloudflare" in page_source or "please enable cookies" in page_source or "human verification" in page_source:
+                print("  🛑 Indeed blocked the automated session (Cloudflare detected)")
+                raise Exception("Indeed blocked automation. Cloudflare challenge detected.")
 
             # Wait for key content to render
             try:
-                WebDriverWait(driver, 15).until(
+                WebDriverWait(driver, 20).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR,
-                        "h1, div#jobDescriptionText, div[class*='jobsearch-JobInfoHeader']"))
+                        "h1, h2, div#jobDescriptionText, div[class*='jobsearch-JobInfoHeader'], [data-testid*='JobTitle']"))
                 )
             except Exception:
                 print("  ⚠️ Selenium wait timeout, continuing with whatever loaded...")
 
-            time.sleep(3)
+            time.sleep(5)
 
             job_data = self._empty_result(url)
             job_data['url'] = driver.current_url
@@ -258,6 +264,8 @@ class IndeedScraper(BaseScraper):
             # --- Title ---
             title_selectors = [
                 "h1.jobsearch-JobInfoHeader-title",
+                "h2.jobsearch-JobInfoHeader-title",
+                "[data-testid='jobsearch-JobInfoHeader-title']",
                 "h1[class*='JobTitle']",
                 "h2[class*='jobTitle']",
                 "h1",
@@ -273,6 +281,8 @@ class IndeedScraper(BaseScraper):
 
             # --- Company ---
             company_selectors = [
+                "div.jobsearch-InlineCompanyRating a",
+                "[data-testid='inline-company-link']",
                 "div[data-company-name='true'] a",
                 "div[data-company-name='true']",
                 "span[data-testid='company-name']",
@@ -289,6 +299,7 @@ class IndeedScraper(BaseScraper):
 
             # --- Location ---
             location_selectors = [
+                "div.jobsearch-JobInfoHeader-subtitle > div:nth-child(2)",
                 "div[data-testid='inlineHeader-companyLocation']",
                 "div[data-testid='job-location']",
                 "div[class*='CompanyLocation']",
