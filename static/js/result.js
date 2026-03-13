@@ -101,8 +101,21 @@ function displayPredictionBadge(result) {
     const isFake = result.is_fake;
     const confidence = result.combined_confidence || result.ai_confidence || 0;
     
+    // Robust detection of unverified state
+    let prediction = result.final_prediction;
+    if (!prediction) {
+        if (result.description && (result.description.includes('blocked automation') || result.description.includes('Could not scrape'))) {
+            prediction = 'UNVERIFIED';
+        } else {
+            prediction = isFake ? 'FAKE JOB' : 'GENUINE JOB';
+        }
+    }
     // Update badge styling
-    if (isFake) {
+    if (prediction === 'UNVERIFIED') {
+        predictionBadge.style.background = 'linear-gradient(135deg, #748ffc 0%, #4c6ef5 100%)'; // Soft blue
+        predictionText.textContent = 'UNVERIFIED';
+        predictionDescription.textContent = 'Automated analysis was blocked or incomplete. Please check the job description manually.';
+    } else if (isFake) {
         predictionBadge.style.background = 'linear-gradient(135deg, #ff6b6b 0%, #ff4757 100%)';
         predictionText.textContent = 'FAKE JOB';
         predictionDescription.textContent = 'This job posting shows strong signs of being fraudulent';
