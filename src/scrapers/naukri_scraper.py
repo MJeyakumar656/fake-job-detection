@@ -77,33 +77,54 @@ class NaukriScraper(BaseScraper):
     #  Tier 1 — Cloudscraper session + Naukri API
     # ------------------------------------------------------------------ #
     def _scrape_via_api(self, url, job_id):
-        """Hit Naukri's internal jobapi/v4 using a cloudscraper session."""
+        """Hit Naukri's robust internal jobapi/v3 using a cloudscraper session."""
         if not job_id:
             raise Exception("Could not extract job ID from URL")
 
-        scraper = cloudscraper.create_scraper(
-            browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
-        )
-
-        # Visit the page first to establish cookies
-        page_resp = scraper.get(url, timeout=15)
-        print(f"  Page status: {page_resp.status_code}")
-
-        # Now hit the API with the session cookies
-        api_url = f'https://www.naukri.com/jobapi/v4/job/{job_id}'
-        api_headers = {
+        # Use the most robust internal API endpoint discovered via research
+        api_url = f"https://www.naukri.com/jobapi/v3/job/{job_id}"
+        
+        # Specific headers required to bypass 406 Not Acceptable errors
+        headers = self.headers.copy()
+        headers.update({
+            'appid': '102',
+            'systemid': '102',
             'Accept': 'application/json',
-            'appid': '109',
-            'systemid': 'Naukri',
-        }
-        api_resp = scraper.get(api_url, headers=api_headers, timeout=10)
-        print(f"  API status: {api_resp.status_code}")
-
-        if api_resp.status_code != 200:
-            raise Exception(f"API returned {api_resp.status_code}: {api_resp.text[:200]}")
-
-        data = api_resp.json()
-        return self._parse_api_response(data, url)
+            'Content-Type': 'application/json',
+            'Referer': f'https://www.naukri.com/job-listings-{job_id}',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br'
+        })
+        
+        try:
+            print(f"🔄 [Tier 1] Querying Naukri v3 API: {api_url}")
+            # Use cloudscraper for initial session
+            scraper = cloudscraper.create_scraper(
+                browser={
+                    'browser': 'chrome',
+                    'platform': 'windows',
+                    'desktop': True
+                }
+            )
+            
+            # Optional: Visit home first to get session cookies if needed
+            # scraper.get("https://www.naukri.com/", timeout=10)
+            
+            response = scraper.get(api_url, headers=headers, timeout=15)
+            print(f"  API status: {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                print("✅ [Tier 1] v3 API extraction successful")
+                return self._parse_api_response(data, url)
+            
+            elif response.status_code == 406:
+                raise Exception("API returned 406: System requires higher-level verification or session cookies")
+            else:
+                raise Exception(f"API failed with status {response.status_code}")
+                
+        except Exception as e:
+            raise Exception(f"v3 API Exception: {str(e)}")
 
     def _parse_api_response(self, data, url):
         """Parse Naukri API v4 JSON response into job_data dict."""

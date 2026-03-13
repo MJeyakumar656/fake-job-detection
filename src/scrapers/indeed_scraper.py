@@ -234,7 +234,18 @@ class IndeedScraper(BaseScraper):
 
         driver = None
         try:
+            # Initialize driver using base class method
             driver = self.init_selenium_driver()
+            
+            # Randomize delay to mimic human behavior
+            import random
+            print(f"  🌍 Navigating to Indeed (Stealth Mode)...")
+            
+            # Sometimes a direct hit triggers Cloudflare; try hitting home first
+            if random.random() > 0.5:
+                driver.get("https://in.indeed.com/")
+                time.sleep(random.uniform(2, 4))
+            
             driver.get(url)
             
             # CRITICAL: Wait for Cloudflare/antibot JS challenge to resolve

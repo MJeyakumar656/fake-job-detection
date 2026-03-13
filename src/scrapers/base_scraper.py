@@ -67,16 +67,29 @@ class BaseScraper(ABC):
             chrome_options.add_argument("--window-size=1280,720") # Smaller window = less memory
 
             # 2. Enhanced anti-detection measures
-            # Realistic User Agent
-            chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            # Realistic User Agent - Randomized to avoid fingerprinting
+            user_agents = [
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+            ]
+            import random
+            selected_ua = random.choice(user_agents)
+            chrome_options.add_argument(f"--user-agent={selected_ua}")
             
             # Disable blink features that reveal automation
             chrome_options.add_argument("--disable-blink-features")
             chrome_options.add_argument("--disable-blink-features=AutomationControlled")
             
+            # Add randomized window size to avoid standard bot fingerprint
+            w = random.randint(1200, 1600)
+            h = random.randint(700, 900)
+            chrome_options.add_argument(f"--window-size={w},{h}")
+
             # General security bypasses (often needed for stubborn sites)
             chrome_options.add_argument("--disable-web-security")
             chrome_options.add_argument("--allow-running-insecure-content")
+            chrome_options.add_argument("--no-pings")
             import os
             proxy = os.getenv('SCRAPER_PROXY')
             if proxy:
