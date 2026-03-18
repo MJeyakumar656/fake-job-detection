@@ -52,10 +52,28 @@ class JobAnalyzer:
             return analysis_result
             
         except Exception as e:
-            return {
-                'error': f"Failed to analyze job: {str(e)}",
-                'success': False
+            print(f"❌ Scraping exception caught: {str(e)}")
+            
+            # Instead of failing with HTTP 400, format a mock job_data 
+            # to trigger the blue UNVERIFIED banner in the UI
+            error_job_data = {
+                'title': 'Extraction Failed',
+                'company': 'Extraction Failed',
+                'location': 'Extraction Failed',
+                'description': f'Could not scrape this job due to an internal error or block. Please paste the job description manually.\n\n[Debug]: {str(e)}',
+                'error': str(e),
+                'url': url,
+                'job_portal': 'Unknown'
             }
+            
+            print("[2/3] Running AI analysis on fallback data...")
+            analysis_result, features = self._analyze_job_data(error_job_data)
+
+            print("[3/3] Generating quality assessment...")
+            analysis_result['job_quality'] = self._assess_job_quality(analysis_result, features)
+            
+            print("[OK] Fallback Analysis completed")
+            return analysis_result
     
     def analyze_from_text(self, job_description_text):
         """Analyze job from pasted text"""
