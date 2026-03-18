@@ -153,47 +153,17 @@ class BaseScraper(ABC):
                 except Exception as ver_err:
                     print(f"⚠️ Could not detect Chrome version: {ver_err}")
             
-            # CRITICAL FIX FOR UNDETECTED CHROMEDRIVER ON RENDER
-            # undetected_chromedriver has a bug where it auto-detects Chrome instead of Chromium 
-            # and throws "Could not determine browser executable" if Chrome isn't found,
-            # EVEN IF we pass browser_executable_path via kwargs.
-            # We must monkeypatch uc.find_chrome_executable
+            # 3. Initialize Standard Selenium (Bypassing UC to avoid hangs)
+            from selenium import webdriver
+            from selenium.webdriver.chrome.service import Service
             
-            original_find_chrome = uc.find_chrome_executable
+            print(f"  Launching Chrome with webdriver...")
             
-            try:
-                # Force the patcher to always return our detected path if we found one
-                if browser_path:
-                    uc.find_chrome_executable = lambda: browser_path
+            # If we detected a browser path, use it
+            if browser_path:
+                chrome_options.binary_location = browser_path
                 
-                driver_kwargs = {
-                    "options": chrome_options,
-                    "use_subprocess": True, # Helps prevent detached process issues in Docker
-                }
-                
-                if browser_path:
-                    driver_kwargs["browser_executable_path"] = browser_path
-                
-                # Pass version_main to force correct ChromeDriver version
-                if version_main:
-                    driver_kwargs["version_main"] = version_main
-    
-                try:
-                    driver = uc.Chrome(**driver_kwargs)
-                except TypeError as e:
-                    if "expected str, bytes or os.PathLike object, not NoneType" in str(e) or "Must be a String" in str(e):
-                        print("⚠️ Undetected-chromedriver rejected the path. Forcing initialization bypass...")
-                        class PatchedChrome(uc.Chrome):
-                            def __init__(self, *args, **kwargs):
-                                kwargs['browser_executable_path'] = browser_path
-                                super().__init__(*args, **kwargs)
-                                
-                        driver = PatchedChrome(**driver_kwargs)
-                    else:
-                        raise e
-            finally:
-                # Always restore the original function
-                uc.find_chrome_executable = original_find_chrome
+            driver = webdriver.Chrome(options=chrome_options)
 
             # Increase timeouts significantly for slow Render cold-starts
             driver.set_page_load_timeout(60)
@@ -210,23 +180,6 @@ class BaseScraper(ABC):
                 })
             except Exception as e:
                 print(f"⚠️ Could not execute CDP command: {e}")
-                
-            # FIX FOR WINDOWS: undetected_chromedriver __del__ method throws WinError 6
-            # when trying to kill the process group if it's already dead.
-            # We monkeypatch the driver's __del__ method to ignore this specific error.
-            if os.name == 'nt':
-                original_del = getattr(driver.__class__, '__del__', None)
-                if original_del:
-                    def safe_del(self):
-                        try:
-                            original_del(self)
-                        except OSError as e:
-                            # Ignore WinError 6 (The handle is invalid)
-                            if getattr(e, 'winerror', None) != 6:
-                                pass
-                        except Exception:
-                            pass
-                    driver.__class__.__del__ = safe_del
 
             return driver
         except Exception as e:
