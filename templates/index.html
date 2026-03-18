@@ -120,17 +120,6 @@
 
             <!-- Input Form -->
             <form id="analyzeForm" class="analyze-form">
-                <div class="input-group">
-                    <label for="jobInput" id="inputLabel">Paste Job URL:</label>
-                    <textarea id="jobInput" name="jobInput" placeholder="https://www.linkedin.com/jobs/view/..."
-                        rows="4" required>
-                    </textarea>
-                    <small class="helper-text" id="helperText">
-                        <i class="fas fa-info-circle"></i>
-                        Supported portals: LinkedIn, Naukri, Indeed, Internshala
-                    </small>
-                </div>
-
                 <!-- Manual Entry Fields (Hidden initially) -->
                 <div id="manualFields" class="hidden">
                     <div class="form-row">
@@ -147,6 +136,17 @@
                         <label for="locationInput">Location (Optional):</label>
                         <input type="text" id="locationInput" name="locationInput" placeholder="e.g. Remote, San Francisco, CA">
                     </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="jobInput" id="inputLabel">Paste Job URL:</label>
+                    <textarea id="jobInput" name="jobInput" placeholder="https://www.linkedin.com/jobs/view/..."
+                        rows="4" required>
+                    </textarea>
+                    <small class="helper-text" id="helperText">
+                        <i class="fas fa-info-circle"></i>
+                        Supported portals: LinkedIn, Naukri, Indeed, Internshala
+                    </small>
                 </div>
 
                 <div class="form-actions">
