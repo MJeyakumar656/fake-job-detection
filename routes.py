@@ -192,7 +192,12 @@ def analyze_job():
                         'fallback': 'text_input_required'
                     }), 400
         else:
-            result = analyzer.analyze_from_text(job_input)
+            # Extract manual fields if provided
+            company = data.get('company', '').strip() if data.get('company') else None
+            title = data.get('title', '').strip() if data.get('title') else None
+            location = data.get('location', '').strip() if data.get('location') else None
+            
+            result = analyzer.analyze_from_text(job_input, company=company, title=title, location=location)
 
         # Check if analysis was successful
         if not result.get('success', True) and result.get('error'):
@@ -243,7 +248,11 @@ def analyze_batch():
             if input_type == 'url':
                 result = analyzer.analyze_from_url(job_input)
             else:
-                result = analyzer.analyze_from_text(job_input)
+                company = job.get('company', '').strip() if job.get('company') else None
+                title = job.get('title', '').strip() if job.get('title') else None
+                location = job.get('location', '').strip() if job.get('location') else None
+                
+                result = analyzer.analyze_from_text(job_input, company=company, title=title, location=location)
             
             results.append(result)
         

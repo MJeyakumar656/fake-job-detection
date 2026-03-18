@@ -125,10 +125,28 @@
                     <textarea id="jobInput" name="jobInput" placeholder="https://www.linkedin.com/jobs/view/..."
                         rows="4" required>
                     </textarea>
-                    <small class="helper-text">
+                    <small class="helper-text" id="helperText">
                         <i class="fas fa-info-circle"></i>
                         Supported portals: LinkedIn, Naukri, Indeed, Internshala
                     </small>
+                </div>
+
+                <!-- Manual Entry Fields (Hidden initially) -->
+                <div id="manualFields" class="hidden">
+                    <div class="form-row">
+                        <div class="input-group half-width">
+                            <label for="companyInput">Company Name (Optional):</label>
+                            <input type="text" id="companyInput" name="companyInput" placeholder="e.g. Google, Microsoft">
+                        </div>
+                        <div class="input-group half-width">
+                            <label for="titleInput">Job Title (Optional):</label>
+                            <input type="text" id="titleInput" name="titleInput" placeholder="e.g. Software Engineer">
+                        </div>
+                    </div>
+                    <div class="input-group">
+                        <label for="locationInput">Location (Optional):</label>
+                        <input type="text" id="locationInput" name="locationInput" placeholder="e.g. Remote, San Francisco, CA">
+                    </div>
                 </div>
 
                 <div class="form-actions">

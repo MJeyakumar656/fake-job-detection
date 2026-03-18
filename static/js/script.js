@@ -6,6 +6,10 @@ const analyzeBtn = document.getElementById('analyzeBtn');
 const loadingState = document.getElementById('loadingState');
 const errorMessage = document.getElementById('errorMessage');
 const toggleBtns = document.querySelectorAll('.toggle-btn');
+const manualFields = document.getElementById('manualFields'); // NEW
+const companyInput = document.getElementById('companyInput'); // NEW
+const titleInput = document.getElementById('titleInput'); // NEW
+const locationInput = document.getElementById('locationInput'); // NEW
 
 let currentInputType = 'url';
 
@@ -24,9 +28,11 @@ toggleBtns.forEach(btn => {
         if (currentInputType === 'url') {
             inputLabel.textContent = 'Paste Job URL:';
             jobInput.placeholder = 'https://www.linkedin.com/jobs/view/...';
+            if (manualFields) manualFields.classList.add('hidden');
         } else {
             inputLabel.textContent = 'Paste Job Description:';
             jobInput.placeholder = 'Paste the complete job description text here...';
+            if (manualFields) manualFields.classList.remove('hidden');
         }
         
         jobInput.value = '';
@@ -63,8 +69,13 @@ analyzeForm.addEventListener('submit', async function(e) {
     errorMessage.classList.add('hidden');
 
     try {
+        // Collect optional fields
+        const companyValue = currentInputType === 'text' && companyInput ? companyInput.value.trim() : '';
+        const titleValue = currentInputType === 'text' && titleInput ? titleInput.value.trim() : '';
+        const locationValue = currentInputType === 'text' && locationInput ? locationInput.value.trim() : '';
+
         // Call API
-        const result = await analyzeJob(jobInputValue, currentInputType);
+        const result = await analyzeJob(jobInputValue, currentInputType, companyValue, titleValue, locationValue);
 
         // Store result and redirect
         sessionStorage.setItem('analysisResult', JSON.stringify(result));
@@ -82,17 +93,25 @@ analyzeForm.addEventListener('submit', async function(e) {
 /**
  * Analyze job posting via API
  */
-async function analyzeJob(jobInput, inputType) {
+async function analyzeJob(jobInput, inputType, company = '', title = '', location = '') {
     try {
+        const payload = {
+            job_input: jobInput,
+            input_type: inputType
+        };
+        
+        if (inputType === 'text') {
+            if (company) payload.company = company;
+            if (title) payload.title = title;
+            if (location) payload.location = location;
+        }
+
         const response = await fetch('/api/analyze', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                job_input: jobInput,
-                input_type: inputType
-            })
+            body: JSON.stringify(payload)
         });
 
         const data = await response.json();

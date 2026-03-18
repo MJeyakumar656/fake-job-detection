@@ -75,14 +75,14 @@ class JobAnalyzer:
             print("[OK] Fallback Analysis completed")
             return analysis_result
     
-    def analyze_from_text(self, job_description_text):
+    def analyze_from_text(self, job_description_text, company=None, title=None, location=None):
         """Analyze job from pasted text"""
         print(f"\n[INFO] Analyzing job from pasted text")
         
         try:
             # Parse job description text to extract structured data
             print("[1/3] Parsing job description...")
-            job_data = self._parse_job_text(job_description_text)
+            job_data = self._parse_job_text(job_description_text, company, title, location)
             print("✓ Job data parsed successfully")
             
             # Step 2: Analyze job posting
@@ -102,16 +102,16 @@ class JobAnalyzer:
                 'success': False
             }
     
-    def _parse_job_text(self, job_description_text):
+    def _parse_job_text(self, job_description_text, explicit_company=None, explicit_title=None, explicit_location=None):
         """Parse job description text into structured data - enhanced extraction"""
         text = job_description_text.strip()
         lines = text.split('\n')
 
         job_data = {
-            'title': self._extract_title_enhanced(text, lines),
-            'company': self._extract_company_enhanced(text, lines),
+            'title': explicit_title if explicit_title else self._extract_title_enhanced(text, lines),
+            'company': explicit_company if explicit_company else self._extract_company_enhanced(text, lines),
             'company_domain': self._extract_domain(lines),
-            'location': self._extract_location(lines),
+            'location': explicit_location if explicit_location else self._extract_location(lines),
             'description': text,
             'requirements': self._extract_requirements(lines),
             'salary': self._extract_salary(lines),
