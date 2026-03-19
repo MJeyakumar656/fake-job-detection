@@ -114,7 +114,13 @@ async function analyzeJob(jobInput, inputType, company = '', title = '', locatio
             body: JSON.stringify(payload)
         });
 
-        const data = await response.json();
+        let data;
+        try {
+            data = await response.json();
+        } catch (e) {
+            console.error("JSON Parse Error. Server may have timed out:", e);
+            throw new Error(`Server returned an invalid response (Status ${response.status}). The website (like Internshala) might be blocking the scraper or taking too long.`);
+        }
 
         if (!response.ok) {
             throw new Error(data.error || 'Analysis failed');

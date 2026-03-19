@@ -154,6 +154,19 @@ function displayJobDetails(result) {
  * Display confidence score
  */
 function displayConfidenceScore(result) {
+    const isUnverified = result.final_prediction === 'UNVERIFIED' || 
+                         (result.description && (result.description.includes('blocked automation') || result.description.includes('Could not scrape')));
+
+    if (isUnverified) {
+        confidencePercentage.textContent = 'N/A';
+        confidencePercentage.style.color = '#748ffc';
+        confidenceFill.style.width = '0%';
+        
+        const descriptionEl = document.querySelector('.confidence-description');
+        if (descriptionEl) descriptionEl.style.display = 'none';
+        return;
+    }
+
     const confidence = result.combined_confidence || result.ai_confidence || 50;
     
     confidencePercentage.textContent = confidence.toFixed(1) + '%';

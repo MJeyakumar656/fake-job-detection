@@ -26,7 +26,7 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
-    default_limits=["200 per day", "50 per hour"],
+    default_limits=["2000 per day", "500 per hour"],
     storage_uri="memory://"
 )
 
@@ -66,6 +66,7 @@ def setup_logging():
 
 # ==================== Routes ====================
 @app.route('/health')
+@limiter.exempt
 def health():
     """Health check for Render"""
     return "API is Running", 200
