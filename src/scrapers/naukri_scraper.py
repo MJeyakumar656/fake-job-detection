@@ -101,6 +101,7 @@ class NaukriScraper(BaseScraper):
             'clientid': 'd369c73d-82d8-4f51-b8f4-6f0925c34537',
             'appid': '109',
             'systemid': '109',
+            'X-Requested-With': 'com.naukri.naukri',
             'Accept': 'application/json',
             'Content-Type': 'application/json',
             'Referer': url,
@@ -257,19 +258,35 @@ class NaukriScraper(BaseScraper):
             if og_desc and og_desc.get('content'):
                 job_data['description'] = og_desc['content'].strip()
 
-        # --- Strategy C: Embedded preloadState in scripts ---
+        # --- Strategy C: window.__PRELOADED_STATE__ / jobDetailsResp ---
         if job_data['description'] == 'No description available':
             for script in soup.find_all('script'):
-                if script.string and 'jobDetailsResp' in script.string:
+                if not script.string: continue
+                
+                # Option 1: window.__PRELOADED_STATE__
+                if 'window.__PRELOADED_STATE__' in script.string:
                     try:
-                        # Find the JSON blob containing job data
+                        json_str = script.string.split('window.__PRELOADED_STATE__ =', 1)[1].split(';', 1)[0].strip()
+                        data = json.loads(json_str)
+                        state = data.get('state', data)
+                        jd = state.get('jobDetails', state)
+                        if jd:
+                            job_data = self._parse_api_response(jd, url)
+                            if self.validate_job_data(job_data):
+                                print("✅ [Tier 2] window.__PRELOADED_STATE__ extraction successful")
+                                return job_data
+                    except Exception: pass
+
+                # Option 2: jobDetailsResp (Legacy/Alternative)
+                if 'jobDetailsResp' in script.string:
+                    try:
                         match = re.search(r'"jobDetailsResp"\s*:\s*(\{.*?\})\s*,\s*"', script.string)
                         if match:
                             embedded = json.loads(match.group(1))
                             if embedded.get('data'):
+                                print("✅ [Tier 2] jobDetailsResp extraction successful")
                                 return self._parse_api_response(embedded['data'], url)
-                    except Exception:
-                        pass
+                    except Exception: pass
 
         # --- Strategy D: HTML selector fallbacks ---
         if job_data['title'] == 'Unknown Job Title':
