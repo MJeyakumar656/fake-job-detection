@@ -103,8 +103,29 @@ function displayPredictionBadge(result) {
     const isFake = result.is_fake;
     const confidence = result.combined_confidence || result.ai_confidence || 0;
     
+    // Robust detection of unverified state
+    let prediction = result.final_prediction;
+    if (!prediction || prediction !== 'UNVERIFIED') {
+        const title = (result.job_title || '').toLowerCase();
+        const company = (result.company || '').toLowerCase();
+        const desc = (result.description || '').toLowerCase();
+        
+        if (title.includes('extraction failed') || 
+            company.includes('extraction failed') || 
+            desc.includes('blocked automation') || 
+            desc.includes('could not scrape')) {
+            prediction = 'UNVERIFIED';
+        } else if (!prediction) {
+            prediction = isFake ? 'FAKE JOB' : 'GENUINE JOB';
+        }
+    }
+
     // Update badge styling
-    if (isFake) {
+    if (prediction === 'UNVERIFIED') {
+        predictionBadge.style.background = 'linear-gradient(135deg, #748ffc 0%, #4c6ef5 100%)'; // Soft blue
+        predictionText.textContent = 'UNVERIFIED';
+        predictionDescription.textContent = 'Automated analysis was blocked or incomplete. Please check the job description manually.';
+    } else if (isFake) {
         predictionBadge.style.background = 'linear-gradient(135deg, #ff6b6b 0%, #ff4757 100%)';
         predictionText.textContent = 'FAKE JOB';
         predictionDescription.textContent = `This job posting shows strong signs of being fraudulent (${confidence.toFixed(1)}% confidence)`;
@@ -153,6 +174,21 @@ function displayJobDetails(result) {
  * Display confidence score
  */
 function displayConfidenceScore(result) {
+    const isUnverified = result.final_prediction === 'UNVERIFIED' || 
+                         (result.job_title && result.job_title.includes('Extraction Failed')) ||
+                         (result.company && result.company.includes('Extraction Failed')) ||
+                         (result.description && (result.description.includes('blocked automation') || result.description.includes('Could not scrape')));
+
+    if (isUnverified) {
+        confidencePercentage.textContent = '--.-%';
+        confidencePercentage.style.color = '#748ffc';
+        confidenceFill.style.width = '0%';
+        
+        const descriptionEl = document.querySelector('.confidence-description');
+        if (descriptionEl) descriptionEl.style.display = 'none';
+        return;
+    }
+
     const confidence = result.combined_confidence || result.ai_confidence || 50;
     
     confidencePercentage.textContent = `${confidence.toFixed(1)}%`;

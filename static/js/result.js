@@ -103,10 +103,17 @@ function displayPredictionBadge(result) {
     
     // Robust detection of unverified state
     let prediction = result.final_prediction;
-    if (!prediction) {
-        if (result.description && (result.description.includes('blocked automation') || result.description.includes('Could not scrape'))) {
+    if (!prediction || prediction !== 'UNVERIFIED') {
+        const title = (result.job_title || '').toLowerCase();
+        const company = (result.company || '').toLowerCase();
+        const desc = (result.description || '').toLowerCase();
+        
+        if (title.includes('extraction failed') || 
+            company.includes('extraction failed') || 
+            desc.includes('blocked automation') || 
+            desc.includes('could not scrape')) {
             prediction = 'UNVERIFIED';
-        } else {
+        } else if (!prediction) {
             prediction = isFake ? 'FAKE JOB' : 'GENUINE JOB';
         }
     }
@@ -155,10 +162,12 @@ function displayJobDetails(result) {
  */
 function displayConfidenceScore(result) {
     const isUnverified = result.final_prediction === 'UNVERIFIED' || 
+                         (result.job_title && result.job_title.includes('Extraction Failed')) ||
+                         (result.company && result.company.includes('Extraction Failed')) ||
                          (result.description && (result.description.includes('blocked automation') || result.description.includes('Could not scrape')));
 
     if (isUnverified) {
-        confidencePercentage.textContent = 'N/A';
+        confidencePercentage.textContent = '--.-%';
         confidencePercentage.style.color = '#748ffc';
         confidenceFill.style.width = '0%';
         
