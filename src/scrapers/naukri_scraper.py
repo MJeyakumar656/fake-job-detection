@@ -81,23 +81,23 @@ class NaukriScraper(BaseScraper):
         if not job_id:
             raise Exception("Could not extract job ID from URL")
 
-        # Use the most robust internal API endpoint discovered via research
-        api_url = f"https://www.naukri.com/jobapi/v3/job/{job_id}"
+        # Use the most robust internal API endpoint (v4)
+        api_url = f"https://www.naukri.com/jobapi/v4/job/{job_id}"
         
         # Specific headers required to bypass 406 Not Acceptable errors
         headers = self.headers.copy()
         headers.update({
-            'appid': '102',
-            'systemid': '102',
+            'Client-Id': 'd369c73d-82d8-4f51-b8f4-6f0925c34537',
+            'App-Id': '122',
+            'System-Id': '122',
             'Accept': 'application/json',
             'Content-Type': 'application/json',
             'Referer': f'https://www.naukri.com/job-listings-{job_id}',
             'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br'
         })
         
         try:
-            print(f"🔄 [Tier 1] Querying Naukri v3 API: {api_url}")
+            print(f"🔄 [Tier 1] Querying Naukri v4 API: {api_url}")
             # Use cloudscraper for initial session
             scraper = cloudscraper.create_scraper(
                 browser={
@@ -439,13 +439,24 @@ class NaukriScraper(BaseScraper):
                             break
                     except Exception: continue
 
-                # Fallback to full page text if description still missing
+                # --- Text-based Fallback for Description ---
                 if job_data['description'] == 'No description available':
                     try:
-                        main = driver.find_element(By.CSS_SELECTOR, "main, #root, [class*='job-detail']")
-                        text = main.text.strip()
-                        if len(text) > 200:
-                            job_data['description'] = text
+                        # Try to find the section by text if selectors failed
+                        main_content = driver.find_element(By.TAG_NAME, "main")
+                        text = main_content.text
+                        if "Job description" in text:
+                            # Split by "Job description" and take the following part
+                            parts = text.split("Job description", 1)
+                            if len(parts) > 1:
+                                potential_desc = parts[1].split("Role", 1)[0].split("Required", 1)[0].strip()
+                                if len(potential_desc) > 100:
+                                    job_data['description'] = potential_desc
+                        
+                        # If still missing, try a different approach: grab the largest text block
+                        if job_data['description'] == 'No description available':
+                            if len(text) > 200:
+                                job_data['description'] = text.strip()
                     except Exception: pass
 
                 # Cleanup description: remove Naukri fraud alert boilerplate

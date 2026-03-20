@@ -44,12 +44,10 @@ class BaseScraper(ABC):
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--disable-dev-shm-usage")
             chrome_options.add_argument("--disable-gpu")
-            chrome_options.add_argument("--single-process")
             chrome_options.add_argument("--disable-browser-side-navigation")
             chrome_options.add_argument("--disable-infobars")
             chrome_options.add_argument("--disable-extensions")
             chrome_options.add_argument("--dns-prefetch-disable")
-            chrome_options.add_argument("--window-size=1920,1080")
             
             # Additional flags for uc stability in Docker
             chrome_options.add_argument("--disable-features=IsolateOrigins,site-per-process")
@@ -67,24 +65,17 @@ class BaseScraper(ABC):
             chrome_options.add_argument("--window-size=1280,720") # Smaller window = less memory
 
             # 2. Enhanced anti-detection measures
-            # Realistic User Agent - Randomized to avoid fingerprinting
+            import random
             user_agents = [
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
             ]
-            import random
             selected_ua = random.choice(user_agents)
             chrome_options.add_argument(f"--user-agent={selected_ua}")
             
             # Disable blink features that reveal automation
             chrome_options.add_argument("--disable-blink-features")
             chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-            
-            # Add randomized window size to avoid standard bot fingerprint
-            w = random.randint(1200, 1600)
-            h = random.randint(700, 900)
-            chrome_options.add_argument(f"--window-size={w},{h}")
 
             # General security bypasses (often needed for stubborn sites)
             chrome_options.add_argument("--disable-web-security")
@@ -157,13 +148,16 @@ class BaseScraper(ABC):
             from selenium import webdriver
             from selenium.webdriver.chrome.service import Service
             
-            print(f"  Launching Chrome with webdriver...")
+            # 3. Initialize undetected-chromedriver
+            print(f"  Launching stealth Chrome with undetected-chromedriver...")
             
-            # If we detected a browser path, use it
-            if browser_path:
-                chrome_options.binary_location = browser_path
-                
-            driver = webdriver.Chrome(options=chrome_options)
+            # Note: We don't set binary_location on chrome_options manually anymore,
+            # uc.Chrome handles it via browser_executable_path
+            driver = uc.Chrome(
+                options=chrome_options, 
+                browser_executable_path=browser_path,
+                version_main=version_main
+            )
 
             # Increase timeouts significantly for slow Render cold-starts
             driver.set_page_load_timeout(60)
@@ -183,7 +177,7 @@ class BaseScraper(ABC):
 
             return driver
         except Exception as e:
-            raise Exception(f"Failed to initialize Selenium: {str(e)}")
+            raise Exception(f"Failed to initialize Selenium (UC): {str(e)}")
     
     def extract_domain_from_url(self, url):
         """Extract domain from URL"""
