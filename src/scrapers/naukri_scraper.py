@@ -288,17 +288,42 @@ class NaukriScraper(BaseScraper):
             if og_desc and og_desc.get('content'):
                 job_data['description'] = og_desc['content'].strip()
 
-        # --- Strategy D: Density-Based Balanced JSON Scan ---
+        # --- Strategy D: window.__PRELOADED_STATE__ (Internal State) ---
         if job_data['description'] == 'No description available':
             try:
                 for script in soup.find_all('script'):
                     content = script.string
+                    if content and 'window.__PRELOADED_STATE__' in content:
+                        match = re.search(r'window\.__PRELOADED_STATE__\s*=\s*(\{.*?\})(?:;|$)', content, re.DOTALL)
+                        if match:
+                            try:
+                                state_json = json.loads(match.group(1))
+                                # Deep search for 'description' or 'jobDescription'
+                                def find_recursive(obj, key):
+                                    if isinstance(obj, dict):
+                                        if key in obj: return obj[key]
+                                        for v in obj.values():
+                                            res = find_recursive(v, key)
+                                            if res: return res
+                                    elif isinstance(obj, list):
+                                        for it in obj:
+                                            res = find_recursive(it, key)
+                                            if res: return res
+                                    return None
+
+                                desc = find_recursive(state_json, 'jobDescription') or find_recursive(state_json, 'description')
+                                if desc and len(str(desc)) > 100:
+                                    print("✅ [Tier 2] window.__PRELOADED_STATE__ extraction successful")
+                                    job_data['description'] = BeautifulSoup(str(desc), "html.parser").get_text(separator="\n").strip()
+                                    if self.validate_job_data(job_data): return job_data
+                            except: pass
+
+                # --- Strategy E: Density-Based Balanced JSON Scan ---
+                for script in soup.find_all('script'):
+                    content = script.string
                     if content and 'jobDescription' in content:
-                        # Find all occurrences of "jobDescription"
                         indices = [m.start() for m in re.finditer('jobDescription', content)]
                         for idx in indices:
-                            # Search backwards for '{' and forwards for '}' to find a potential JSON block
-                            # A simple balanced brace approach
                             start_node = content.rfind('{', 0, idx)
                             if start_node == -1: continue
                             
@@ -308,7 +333,6 @@ class NaukriScraper(BaseScraper):
                                 elif content[i] == '}':
                                     if stack: stack.pop()
                                     if not stack:
-                                        # Potential JSON object found
                                         try:
                                             jd_block = json.loads(content[start_node:i+1])
                                             if jd_block.get('jobDescription') or jd_block.get('description'):
@@ -619,12 +643,20 @@ class NaukriScraper(BaseScraper):
         result['error'] = message
         return result
 
+    def validate_job_data(self, data):
+        """Override base validation to handle Naukri-specific placeholders."""
+        if not data: return False
+        
+        # Must have a real title and a real description
+        has_title = data.get('title', '').strip() not in ('', 'Unknown Job Title', 'Extraction Failed')
+        has_desc = data.get('description', '').strip() not in ('', 'No description available', 'Extraction Failed')
+        
+        # For main tiers, we REQUIRE a description to be considered successful
+        return has_title and has_desc
+
     def _is_valid_result(self, result):
-        """Check if a scraping result has meaningful data."""
-        has_title = result.get('title', '').strip() not in ('', 'Unknown Job Title')
-        has_desc = result.get('description', '').strip() not in ('', 'No description available')
-        # Consider valid if we got either a real title or a real description
-        return has_title or has_desc
+        """Check if a scraping result has meaningful data (Used by main scrape loop)."""
+        return self.validate_job_data(result)
 
     def _parse_url_slug(self, url):
         """Extract job title, company, and location from Naukri URL slug.
