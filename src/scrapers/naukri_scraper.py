@@ -342,6 +342,7 @@ class NaukriScraper(BaseScraper):
 
                 # --- Title ---
                 title_selectors = [
+                    "h1[class*='styles_jd-header-title']",
                     "h1.styles_jd-header-title__j_169", 
                     "h1.jd-header-title", 
                     "h1[class*='header-title']", 
@@ -358,6 +359,8 @@ class NaukriScraper(BaseScraper):
 
                 # --- Company ---
                 company_selectors = [
+                    "a[class*='styles_jd-header-comp-name']",
+                    "div[class*='styles_jd-header-comp-name']",
                     "a.styles_jd-header-comp-name__M19_L",
                     "a[title*='Careers']",
                     "a[class*='comp-name']", 
@@ -420,7 +423,9 @@ class NaukriScraper(BaseScraper):
                 # --- Description ---
                 desc_selectors = [
                     "section.job-desc", 
-                    ".styles_job-desc__n_0_P",
+                    "section[class*='job-desc']",
+                    "div.styles_job-desc-container__j_V5Z",
+                    "div[class*='job-desc-container']",
                     "div.dang-inner-html", 
                     "div[class*='job-desc']", 
                     "div[class*='description']", 
@@ -612,15 +617,22 @@ class NaukriScraper(BaseScraper):
         """Fill in missing fields using data extracted from the URL slug."""
         url_info = self._parse_url_slug(url)
 
-        if result.get('title') in ('', 'Unknown Job Title') and url_info['title']:
+        # Allow updating even if set to "Extraction Failed"
+        def should_update(current_val, placeholders):
+            if not current_val: return True
+            return current_val.strip() in placeholders
+
+        placeholders = ('', 'Unknown Job Title', 'Unknown Company', 'Not Specified', 'Extraction Failed')
+
+        if should_update(result.get('title'), placeholders) and url_info['title']:
             result['title'] = url_info['title']
             print(f"  📎 Title from URL: {url_info['title']}")
 
-        if result.get('company') in ('', 'Unknown Company') and url_info['company']:
+        if should_update(result.get('company'), placeholders) and url_info['company']:
             result['company'] = url_info['company']
             print(f"  📎 Company from URL: {url_info['company']}")
 
-        if result.get('location') in ('', 'Not Specified') and url_info['location']:
+        if should_update(result.get('location'), placeholders) and url_info['location']:
             result['location'] = url_info['location']
             print(f"  📎 Location from URL: {url_info['location']}")
 
