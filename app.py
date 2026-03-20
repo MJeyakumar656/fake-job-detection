@@ -71,6 +71,11 @@ def health():
     """Health check for Render"""
     return "API is Running", 200
 
+@app.route('/version')
+def version():
+    """Version check for deployment verification"""
+    return jsonify({"version": "1.4", "status": "deployed"}), 200
+
 @app.route('/')
 def index():
     """Home page"""
