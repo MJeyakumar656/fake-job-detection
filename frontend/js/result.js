@@ -163,9 +163,9 @@ function displayJobDetails(result) {
  */
 function displayConfidenceScore(result) {
     const isUnverified = result.final_prediction === 'UNVERIFIED' || 
-                         (result.job_title && result.job_title.includes('Extraction Failed')) ||
-                         (result.company && result.company.includes('Extraction Failed')) ||
-                         (result.description && (result.description.includes('blocked automation') || result.description.includes('Could not scrape')));
+                         (result.job_title && result.job_title.toLowerCase().includes('extraction failed')) ||
+                         (result.company && result.company.toLowerCase().includes('extraction failed')) ||
+                         (result.description && (result.description.toLowerCase().includes('blocked automation') || result.description.toLowerCase().includes('could not scrape')));
 
     if (isUnverified) {
         confidencePercentage.textContent = '--.-%';
