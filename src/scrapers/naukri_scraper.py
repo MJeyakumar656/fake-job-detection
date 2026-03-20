@@ -18,42 +18,47 @@ class NaukriScraper(BaseScraper):
     #  Public entry point
     # ------------------------------------------------------------------ #
     def scrape(self, url):
-        """Scrape Naukri job posting using a three-tier strategy."""
+        """Multi-layer scraping strategy for Naukri (v2.2 Resilience Update)."""
         print("🔗 Scraping Naukri job posting...")
 
         if 'naukri.com' not in url:
             raise Exception("Invalid Naukri URL")
 
-        # Extract job ID from URL (last 10-15 digit number)
+        # Extract job ID from URL
         job_id = self._extract_job_id(url)
         print(f"📋 Extracted job ID: {job_id or 'N/A'}")
 
-        # ---------- Tier 1: Cloudscraper + API ----------
+        # ---------- Tier 1: API (Fastest/Strongest) ----------
         try:
-            print("🔄 [Tier 1] Trying cloudscraper + API...")
+            print("🔄 [Tier 1] Trying Direct API (Mobile/H2)...")
             result = self._scrape_via_api(url, job_id)
             if self._is_valid_result(result):
                 print("✅ [Tier 1] API scraping successful")
                 return self._enrich_from_url(result, url)
-            else:
-                print("⚠️ [Tier 1] API returned incomplete data, trying next tier...")
         except Exception as e:
             print(f"❌ [Tier 1] API failed: {e}")
 
-        # ---------- Tier 2: Cloudscraper HTML + meta/script tags ----------
+        # ---------- Tier 1.5: Google Cache Fallback ----------
         try:
-            print("🔄 [Tier 2] Trying cloudscraper HTML scraping...")
+            cache_result = self._scrape_via_google_cache(url, job_id)
+            if cache_result and self._is_valid_result(cache_result):
+                print("✅ [Tier 1.5] Google Cache scraping successful")
+                return self._enrich_from_url(cache_result, url)
+        except Exception as e:
+            print(f"❌ [Tier 1.5] Google Cache failed: {e}")
+
+        # ---------- Tier 2: Cloudscraper HTML ----------
+        try:
+            print("🔄 [Tier 2] Trying Cloudscraper HTML + Density-Scan...")
             result = self._scrape_via_html(url, job_id)
             if self._is_valid_result(result):
                 print("✅ [Tier 2] HTML scraping successful")
                 return self._enrich_from_url(result, url)
-            else:
-                print("⚠️ [Tier 2] HTML scraping returned incomplete data, trying Selenium...")
         except Exception as e:
             print(f"❌ [Tier 2] HTML scraping failed: {e}")
 
-        last_error = ""
         # ---------- Tier 3: Selenium fallback ----------
+        last_error = "Unknown Error"
         try:
             print("🔄 [Tier 3] Trying Selenium fallback...")
             result = self._scrape_via_selenium(url)
@@ -61,17 +66,17 @@ class NaukriScraper(BaseScraper):
                 print("✅ [Tier 3] Selenium scraping successful")
                 return self._enrich_from_url(result, url)
             else:
-                print("⚠️ [Tier 3] Selenium returned incomplete data")
-                return self._enrich_from_url(result, url)
+                last_error = "Selenium returned incomplete data"
         except Exception as e:
             last_error = str(e)
             print(f"❌ [Tier 3] Selenium failed: {e}")
 
-        # ---------- All tiers failed — use URL parsing as last resort ----------
-        print("⚠️ All network methods failed. Extracting info from URL slug...")
-        msg = f"Could not scrape this job. Please paste the job description manually using the Text tab.\n\n[Render Debug]: {last_error}"
-        result = self._error_result(url, msg)
-        return self._enrich_from_url(result, url)
+        # ---------- Tier 4: Smart Slug Recovery (Always succeeds) ----------
+        print("⚠️ All network methods failed. Running Smart Slug recovery...")
+        result = self._empty_result(url)
+        # Add debug info to description if empty
+        result['description'] = f"Could not scrape this job. [Render Debug]: {last_error}"
+        return self._smart_slug_recovery(result, url)
 
     # ------------------------------------------------------------------ #
     #  Tier 1 — Cloudscraper session + Naukri API
@@ -730,3 +735,62 @@ class NaukriScraper(BaseScraper):
             print(f"  📎 Location from URL: {url_info['location']}")
 
         return result
+
+    # ------------------------------------------------------------------ #
+    #  Tier 4 — Advanced Smart Slug Recovery (Final Safety Net)
+    # ------------------------------------------------------------------ #
+    def _smart_slug_recovery(self, job_data, url):
+        """Extract information from the URL slug if all scraping fails."""
+        try:
+            # URL: https://www.naukri.com/job-listings-user-interface-designer-intern-unpaid-axagon-solutions-chennai-0-to-1-years-180326036796
+            # Extract the part between job-listings- and the job-id
+            parts = url.split("job-listings-")[-1].split("-")
+            if parts and parts[-1].isdigit(): parts.pop() # Remove ID
+            
+            # De-hyphenate and capitalize
+            readable = " ".join(parts).replace("-", " ").title()
+            
+            # Enrich from URL first (gets title/company/location specifically)
+            job_data = self._enrich_from_url(job_data, url)
+            
+            # If title is still unknown, use de-hyphenated readable string
+            if job_data['title'] == 'Unknown Job Title' or not job_data['title']:
+                job_data['title'] = readable
+                
+            # Generate a "Summary Description"
+            if job_data['description'] == 'No description available':
+                job_data['description'] = (
+                    f"Job Summary: {job_data['title']}\n\n"
+                    f"Location: {job_data['location'] or 'Not Specified'}\n"
+                    f"Company: {job_data['company'] or 'Unknown Company'}\n\n"
+                    f"Note: Full description could not be automatically extracted due to portal blocks. "
+                    f"Please visit the official Naukri link to view the full details."
+                )
+                print("✅ [Tier 4] Smart Slug recovery successful")
+        except Exception as e:
+            print(f"  ⚠️ Smart Slug recovery failed: {str(e)}")
+            
+        return job_data
+
+    # ------------------------------------------------------------------ #
+    #  Tier 1.5 — Google Cache Fallback
+    # ------------------------------------------------------------------ #
+    def _scrape_via_google_cache(self, url, job_id):
+        """Attempt to fetch the job page from Google's search cache."""
+        try:
+            cache_url = f"http://webcache.googleusercontent.com/search?q=cache:{url}"
+            print(f"🔄 [Tier 1.5] Attempting Google Cache fetch: {cache_url}")
+            
+            scraper = cloudscraper.create_scraper()
+            # Modern Googlebot-Mobile header
+            scraper.headers.update({
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/W.X.Y.Z Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
+            })
+            
+            resp = scraper.get(cache_url, timeout=12)
+            if resp.status_code == 200:
+                print("✅ [Tier 1.5] Google Cache page fetched")
+                return self._parse_html_content(resp.content, url)
+        except Exception as e:
+            print(f"  ⚠️ Google Cache failed: {str(e)}")
+        return None
