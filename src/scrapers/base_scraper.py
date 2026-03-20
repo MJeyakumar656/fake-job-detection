@@ -38,7 +38,8 @@ class BaseScraper(ABC):
         """Initialize Selenium WebDriver for JavaScript-heavy sites using undetected-chromedriver"""
         try:
             chrome_options = uc.ChromeOptions()
-            chrome_options.add_argument("--headless=new")
+            chrome_options.add_argument("--headless")
+            chrome_options.add_argument("--disable-infobars")
             
             # 1. Extreme Memory Saving Flags (Essential for Render's 512MB RAM limit)
             chrome_options.add_argument("--no-sandbox")

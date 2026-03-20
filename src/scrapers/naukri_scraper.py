@@ -81,24 +81,34 @@ class NaukriScraper(BaseScraper):
         if not job_id:
             raise Exception("Could not extract job ID from URL")
 
+        # Create a session to mimic a real browser sequence
         scraper = cloudscraper.create_scraper(
             browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
         )
         
+        # Step 0: Initial visit to get base cookies
+        try:
+            print(f"  🔗 Initializing Naukri session...")
+            scraper.get("https://www.naukri.com/", timeout=10)
+            # Step 1: Visit the job page to get specialized cookies
+            scraper.get(url, timeout=12)
+        except Exception: pass
+
         # Tier 1a: Try v4 API
         api_v4 = f"https://www.naukri.com/jobapi/v4/job/{job_id}"
         headers_v4 = self.headers.copy()
         headers_v4.update({
+            'clientid': 'd369c73d-82d8-4f51-b8f4-6f0925c34537',
             'appid': '109',
             'systemid': '109',
             'Accept': 'application/json',
             'Content-Type': 'application/json',
-            'Referer': f'https://www.naukri.com/job-listings-{job_id}',
+            'Referer': url,
             'Accept-Language': 'en-US,en;q=0.9',
         })
         
         try:
-            print(f"🔄 [Tier 1a] Querying Naukri v4 API: {api_v4}")
+            print(f"🔄 [Tier 1a] Querying Naukri v4 API (Session-based): {api_v4}")
             response = scraper.get(api_v4, headers=headers_v4, timeout=12)
             if response.status_code == 200:
                 data = response.json()
@@ -463,20 +473,23 @@ class NaukriScraper(BaseScraper):
                 if job_data['description'] == 'No description available':
                     try:
                         # Try to find the section by text if selectors failed
-                        main_content = driver.find_element(By.TAG_NAME, "main")
-                        text = main_content.text
+                        body_content = driver.find_element(By.TAG_NAME, "body")
+                        text = body_content.text
+                        
+                        # Stage 1: Search for 'Job description' heading and extract block
                         if "Job description" in text:
-                            # Split by "Job description" and take the following part
                             parts = text.split("Job description", 1)
                             if len(parts) > 1:
-                                potential_desc = parts[1].split("Role", 1)[0].split("Required", 1)[0].strip()
-                                if len(potential_desc) > 100:
+                                potential_desc = parts[1].split("Role", 1)[0].split("About Company", 1)[0].split("Required", 1)[0].strip()
+                                if len(potential_desc) > 150:
                                     job_data['description'] = potential_desc
                         
-                        # If still missing, try a different approach: grab the largest text block
+                        # Stage 2: If still missing, look for ANY large text block (>500 chars)
                         if job_data['description'] == 'No description available':
-                            if len(text) > 200:
-                                job_data['description'] = text.strip()
+                            paragraphs = text.split("\n\n")
+                            best_p = max(paragraphs, key=len, default="")
+                            if len(best_p) > 200:
+                                job_data['description'] = best_p.strip()
                     except Exception: pass
 
                 # Cleanup description: remove Naukri fraud alert boilerplate
