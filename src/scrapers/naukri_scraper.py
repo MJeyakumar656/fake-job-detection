@@ -115,9 +115,13 @@ class NaukriScraper(BaseScraper):
                 
                 # Fallback to cloudscraper
                 scraper = cloudscraper.create_scraper(
+                    interpreter='nodejs',
                     browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
                 )
-                scraper.headers.update({'User-Agent': profile['ua']})
+                scraper.headers.update({
+                    'User-Agent': profile['ua'],
+                    'Referer': 'https://www.google.com/'
+                })
                 if 'api.naukri.com' in profile['url']:
                     scraper.headers.update({'appid': '121', 'systemid': '121'})
                 
@@ -194,20 +198,29 @@ class NaukriScraper(BaseScraper):
     #  Tier 2 — Cloudscraper HTML + meta tags / embedded data
     # ------------------------------------------------------------------ #
     def _scrape_via_html(self, url, job_id):
-        """Scrape from Naukri HTML using Browser and Googlebot sessions."""
+        """Scrape from Naukri HTML using Node.js interpreter bypass and Search Referer."""
         profiles = [
-            {'name': 'Browser', 'ua': self.headers.get('User-Agent')},
+            {'name': 'Browser (Chrome)', 'ua': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36'},
             {'name': 'Googlebot', 'ua': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'}
         ]
         
         last_exception = None
         for profile in profiles:
             try:
-                print(f"🔄 [Tier 2] Fetching HTML as {profile['name']}...")
+                print(f"🔄 [Tier 2] Fetching HTML as {profile['name']} (Node.js Bypass)...")
                 scraper = cloudscraper.create_scraper(
+                    interpreter='nodejs',
                     browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
                 )
-                scraper.headers.update({'User-Agent': profile['ua']})
+                scraper.headers.update({
+                    'User-Agent': profile['ua'],
+                    'Referer': 'https://www.google.com/',
+                    'X-Requested-With': 'com.naukri.naukri'
+                })
+                
+                # Handshake via Google
+                if profile['name'] == 'Browser (Chrome)':
+                    scraper.get("https://www.google.com/url?q=https://www.naukri.com/", timeout=8)
                 
                 resp = scraper.get(url, timeout=15)
                 if resp.status_code == 200:
@@ -782,10 +795,11 @@ class NaukriScraper(BaseScraper):
             cache_url = f"http://webcache.googleusercontent.com/search?q=cache:{url}"
             print(f"🔄 [Tier 1.5] Attempting Google Cache fetch: {cache_url}")
             
-            scraper = cloudscraper.create_scraper()
+            scraper = cloudscraper.create_scraper(interpreter='nodejs')
             # Modern Googlebot-Mobile header
             scraper.headers.update({
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/W.X.Y.Z Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/W.X.Y.Z Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                'Referer': 'https://www.google.com/'
             })
             
             resp = scraper.get(cache_url, timeout=12)
