@@ -77,69 +77,55 @@ class NaukriScraper(BaseScraper):
     #  Tier 1 — Cloudscraper session + Naukri API
     # ------------------------------------------------------------------ #
     def _scrape_via_api(self, url, job_id):
-        """Hit Naukri's robust internal jobapi using v4 (latest) and v3 (fallback)."""
+        """Hit Naukri's internal jobapi using v4/v3 with Browser and Googlebot spoofing."""
         if not job_id:
             raise Exception("Could not extract job ID from URL")
 
-        # Create a session to mimic a real browser sequence
-        scraper = cloudscraper.create_scraper(
-            browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
-        )
-        
-        # Step 0: Initial visit to get base cookies
-        try:
-            print(f"  🔗 Initializing Naukri session...")
-            scraper.get("https://www.naukri.com/", timeout=10)
-            # Step 1: Visit the job page to get specialized cookies
-            scraper.get(url, timeout=12)
-        except Exception: pass
+        # Profiles to try: Browser then Googlebot
+        profiles = [
+            {'name': 'Browser (Chrome)', 'ua': self.headers.get('User-Agent'), 'extra': {'X-Requested-With': 'com.naukri.naukri'}},
+            {'name': 'Googlebot', 'ua': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)', 'extra': {}}
+        ]
 
-        # Tier 1a: Try v4 API
-        api_v4 = f"https://www.naukri.com/jobapi/v4/job/{job_id}"
-        headers_v4 = self.headers.copy()
-        headers_v4.update({
-            'clientid': 'd369c73d-82d8-4f51-b8f4-6f0925c34537',
-            'appid': '109',
-            'systemid': '109',
-            'X-Requested-With': 'com.naukri.naukri',
-            'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'Referer': url,
-            'Accept-Language': 'en-US,en;q=0.9',
-        })
-        
-        try:
-            print(f"🔄 [Tier 1a] Querying Naukri v4 API (Session-based): {api_v4}")
-            response = scraper.get(api_v4, headers=headers_v4, timeout=12)
-            if response.status_code == 200:
-                data = response.json()
-                job_data = self._parse_api_response(data, url)
-                if self.validate_job_data(job_data):
-                    print("✅ [Tier 1a] v4 API extraction successful")
-                    return job_data
-            else:
-                print(f"  ⚠️ v4 API returned status {response.status_code}")
-        except Exception as e:
-            print(f"  ⚠️ v4 API error: {str(e)}")
+        for profile in profiles:
+            scraper = cloudscraper.create_scraper(
+                browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
+            )
+            scraper.headers.update({'User-Agent': profile['ua']})
+            scraper.headers.update(profile['extra'])
+            
+            try:
+                print(f"  🔗 Initializing Naukri session as {profile['name']}...")
+                scraper.get("https://www.naukri.com/", timeout=10)
+                scraper.get(url, timeout=12)
+                
+                # Try v4 then v3
+                for ver in ['v4', 'v3']:
+                    api_url = f"https://www.naukri.com/jobapi/{ver}/job/{job_id}"
+                    headers = {
+                        'clientid': 'd369c73d-82d8-4f51-b8f4-6f0925c34537',
+                        'appid': '109' if ver == 'v4' else '121',
+                        'systemid': '109' if ver == 'v4' else '121',
+                        'Referer': 'https://www.naukri.com/',
+                        'Accept': 'application/json',
+                    }
+                    
+                    try:
+                        print(f"🔄 [Tier 1] Querying Naukri {ver} API ({profile['name']}): {api_url}")
+                        resp = scraper.get(api_url, headers=headers, timeout=10)
+                        if resp.status_code == 200:
+                            job_data = self._parse_api_response(resp.json(), url)
+                            if self.validate_job_data(job_data):
+                                print(f"✅ [Tier 1] {ver} API successful with {profile['name']}")
+                                return job_data
+                        else:
+                            print(f"  ⚠️ {ver} API status {resp.status_code}")
+                    except Exception as e:
+                        print(f"  ⚠️ {ver} API loop error: {str(e)}")
+            except Exception as e:
+                print(f"  ⚠️ Session init failed for {profile['name']}: {str(e)}")
 
-        # Tier 1b: Try v3 API (Fallback)
-        api_v3 = f"https://www.naukri.com/jobapi/v3/job/{job_id}"
-        headers_v3 = headers_v4.copy()
-        headers_v3.update({'appid': '121', 'systemid': '121'})
-        
-        try:
-            print(f"🔄 [Tier 1b] Querying Naukri v3 API (Fallback): {api_v3}")
-            response = scraper.get(api_v3, headers=headers_v3, timeout=12)
-            if response.status_code == 200:
-                data = response.json()
-                job_data = self._parse_api_response(data, url)
-                if self.validate_job_data(job_data):
-                    print("✅ [Tier 1b] v3 API extraction successful")
-                    return job_data
-        except Exception as e:
-            print(f"  ⚠️ v3 API error: {str(e)}")
-
-        raise Exception("Bulk API extraction failed (both v4 and v3)")
+        raise Exception("Bulk API extraction failed (All profiles)")
 
     def _parse_api_response(self, data, url):
         """Parse Naukri API v4 JSON response into job_data dict."""
@@ -201,15 +187,39 @@ class NaukriScraper(BaseScraper):
     #  Tier 2 — Cloudscraper HTML + meta tags / embedded data
     # ------------------------------------------------------------------ #
     def _scrape_via_html(self, url, job_id):
-        """Scrape from Naukri HTML using meta tags, JSON-LD, and embedded script data."""
-        scraper = cloudscraper.create_scraper(
-            browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
-        )
+        """Scrape from Naukri HTML using Browser and Googlebot sessions."""
+        profiles = [
+            {'name': 'Browser', 'ua': self.headers.get('User-Agent')},
+            {'name': 'Googlebot', 'ua': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'}
+        ]
+        
+        last_exception = None
+        for profile in profiles:
+            try:
+                print(f"🔄 [Tier 2] Fetching HTML as {profile['name']}...")
+                scraper = cloudscraper.create_scraper(
+                    browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
+                )
+                scraper.headers.update({'User-Agent': profile['ua']})
+                
+                resp = scraper.get(url, timeout=15)
+                if resp.status_code == 200:
+                    job_data = self._parse_html_content(resp.content, url)
+                    if self.validate_job_data(job_data):
+                        print(f"✅ [Tier 2] HTML extraction successful with {profile['name']}")
+                        return job_data
+                else:
+                    print(f"  ⚠️ HTML fetch status {resp.status_code} for {profile['name']}")
+            except Exception as e:
+                print(f"  ⚠️ HTML fetch error for {profile['name']}: {str(e)}")
+                last_exception = e
+                
+        if last_exception: raise last_exception
+        raise Exception("HTML scraping failed for all profiles")
 
-        resp = scraper.get(url, timeout=15)
-        resp.raise_for_status()
-        soup = BeautifulSoup(resp.content, 'html.parser')
-
+    def _parse_html_content(self, html_content, url):
+        """Parse the HTML content using multiple strategies."""
+        soup = BeautifulSoup(html_content, 'html.parser')
         job_data = self._empty_result(url)
 
         # --- Strategy A: JSON-LD structured data ---
@@ -263,30 +273,41 @@ class NaukriScraper(BaseScraper):
             for script in soup.find_all('script'):
                 if not script.string: continue
                 
-                # Option 1: window.__PRELOADED_STATE__
-                if 'window.__PRELOADED_STATE__' in script.string:
+                # Option 1: window.__PRELOADED_STATE__ / jobDetailsResp
+                if 'window.__PRELOADED_STATE__' in script.string or 'jobDetailsResp' in script.string:
                     try:
-                        json_str = script.string.split('window.__PRELOADED_STATE__ =', 1)[1].split(';', 1)[0].strip()
-                        data = json.loads(json_str)
-                        state = data.get('state', data)
-                        jd = state.get('jobDetails', state)
-                        if jd:
-                            job_data = self._parse_api_response(jd, url)
-                            if self.validate_job_data(job_data):
-                                print("✅ [Tier 2] window.__PRELOADED_STATE__ extraction successful")
-                                return job_data
+                        # Extract the largest JSON-like block in the script
+                        match = re.search(r'(\{.*\})', script.string)
+                        if match:
+                            data = json.loads(match.group(1))
+                            # Try multiple possible keys for job details
+                            state = data.get('state', data)
+                            jd = state.get('jobDetails', state.get('jobDetailsResp', {}))
+                            if not jd and 'data' in state: jd = state['data']
+                            
+                            if jd:
+                                parsed = self._parse_api_response(jd, url)
+                                if self.validate_job_data(parsed):
+                                    print("✅ [Tier 2] Preloaded State parsed successfully")
+                                    return parsed
                     except Exception: pass
 
-                # Option 2: jobDetailsResp (Legacy/Alternative)
-                if 'jobDetailsResp' in script.string:
-                    try:
-                        match = re.search(r'"jobDetailsResp"\s*:\s*(\{.*?\})\s*,\s*"', script.string)
-                        if match:
-                            embedded = json.loads(match.group(1))
-                            if embedded.get('data'):
-                                print("✅ [Tier 2] jobDetailsResp extraction successful")
-                                return self._parse_api_response(embedded['data'], url)
-                    except Exception: pass
+        # --- Strategy D: Density-Based Brute-Force Script Scan ---
+        if job_data['description'] == 'No description available':
+            try:
+                for script in soup.find_all('script'):
+                    if script.string and 'jobDescription' in script.string:
+                        # Find the JSON object that contains jobDescription
+                        # We use a greedy regex and check for valid JSON
+                        matches = re.findall(r'(\{[^{}]*?"jobDescription"[^{}]*?\})', script.string)
+                        for m in matches:
+                            try:
+                                jd_block = json.loads(m)
+                                if jd_block.get('jobDescription') or jd_block.get('description'):
+                                    print("✅ [Tier 2] Density-based JSON extraction successful")
+                                    return self._parse_api_response(jd_block, url)
+                            except: continue
+            except Exception: pass
 
         # --- Strategy D: HTML selector fallbacks ---
         if job_data['title'] == 'Unknown Job Title':
@@ -373,18 +394,35 @@ class NaukriScraper(BaseScraper):
                 time.sleep(1)
 
                 # Wait for key content to render - be more inclusive
+                job_data = self._empty_result(url)
+                job_data['url'] = driver.current_url
+
                 try:
-                    WebDriverWait(driver, 30).until(
+                    WebDriverWait(driver, 35).until(
                         EC.presence_of_element_located((By.CSS_SELECTOR,
-                            "h1, [class*='jd-header-title'], [class*='job-title'], [class*='comp-name'], main, .styles_job-desc__n_0_P"))
+                            "h1, [class*='jd-header-title'], [class*='job-title'], [class*='comp-name'], main"))
                     )
                 except Exception:
-                    print(f"  ⚠️ Selenium wait timeout on attempt {attempt+1}, check if page actually loaded...")
+                    print(f"  ⚠️ Selenium wait timeout on attempt {attempt+1}. Running 'Last Ghasp' capture...")
+                    # Even if it times out, grab whatever is in the body
+                    try:
+                        raw_body = driver.find_element(By.TAG_NAME, "body").text
+                        if len(raw_body) > 300:
+                            # Try Density-Scan on raw body text (might be JSON-LD in body)
+                            if 'jobDescription' in raw_body:
+                                match = re.search(r'(\{.*?"jobDescription".*?\})', raw_body)
+                                if match:
+                                    try:
+                                        jd_block = json.loads(match.group(1))
+                                        job_data = self._parse_api_response(jd_block, url)
+                                        if self.validate_job_data(job_data):
+                                            print("✅ [Tier 3] 'Last Ghasp' Density capture successful")
+                                            return job_data
+                                    except: pass
+                    except: pass
 
                 # Give React a moment to finish rendering
-                time.sleep(6)
-
-                job_data = self._empty_result(url)
+                time.sleep(4)
                 job_data['url'] = driver.current_url
 
                 # --- Title ---
