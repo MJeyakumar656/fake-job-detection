@@ -77,53 +77,55 @@ class NaukriScraper(BaseScraper):
     #  Tier 1 — Cloudscraper session + Naukri API
     # ------------------------------------------------------------------ #
     def _scrape_via_api(self, url, job_id):
-        """Hit Naukri's internal jobapi using v4/v3 with Browser and Googlebot spoofing."""
+        """Hit Naukri's internal jobapi using v4/v3 and the Direct Mobile API with H2 support."""
         if not job_id:
             raise Exception("Could not extract job ID from URL")
 
-        # Profiles to try: Browser then Googlebot
+        # Profiles to try: Browser, Googlebot, and Direct Mobile
         profiles = [
-            {'name': 'Browser (Chrome)', 'ua': self.headers.get('User-Agent'), 'extra': {'X-Requested-With': 'com.naukri.naukri'}},
-            {'name': 'Googlebot', 'ua': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)', 'extra': {}}
+            {'name': 'Direct Mobile (API.naukri.com)', 'url': f"https://api.naukri.com/v1/job/{job_id}", 'ua': 'Naukri/1.0 (Android 11)', 'h2': True},
+            {'name': 'Browser (Chrome)', 'url': f"https://www.naukri.com/jobapi/v4/job/{job_id}", 'ua': self.headers.get('User-Agent'), 'h2': False},
+            {'name': 'Googlebot', 'url': f"https://www.naukri.com/jobapi/v4/job/{job_id}", 'ua': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)', 'h2': False}
         ]
 
         for profile in profiles:
-            scraper = cloudscraper.create_scraper(
-                browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
-            )
-            scraper.headers.update({'User-Agent': profile['ua']})
-            scraper.headers.update(profile['extra'])
-            
             try:
-                print(f"  🔗 Initializing Naukri session as {profile['name']}...")
-                scraper.get("https://www.naukri.com/", timeout=10)
-                scraper.get(url, timeout=12)
+                print(f"🔄 [Tier 1] Querying {profile['name']}...")
                 
-                # Try v4 then v3
-                for ver in ['v4', 'v3']:
-                    api_url = f"https://www.naukri.com/jobapi/{ver}/job/{job_id}"
-                    headers = {
-                        'clientid': 'd369c73d-82d8-4f51-b8f4-6f0925c34537',
-                        'appid': '109' if ver == 'v4' else '121',
-                        'systemid': '109' if ver == 'v4' else '121',
-                        'Referer': 'https://www.naukri.com/',
-                        'Accept': 'application/json',
-                    }
-                    
-                    try:
-                        print(f"🔄 [Tier 1] Querying Naukri {ver} API ({profile['name']}): {api_url}")
-                        resp = scraper.get(api_url, headers=headers, timeout=10)
+                # Use httpx for H2 if requested
+                if profile.get('h2'):
+                    import httpx
+                    with httpx.Client(http2=True, timeout=10) as client:
+                        headers = {
+                            'User-Agent': profile['ua'],
+                            'client_id': 'd369c73d-82d8-4f51-b8f4-6f0925c34537',
+                            'appid': '121',
+                            'systemid': '121',
+                            'Accept': 'application/json',
+                        }
+                        resp = client.get(profile['url'], headers=headers)
                         if resp.status_code == 200:
                             job_data = self._parse_api_response(resp.json(), url)
                             if self.validate_job_data(job_data):
-                                print(f"✅ [Tier 1] {ver} API successful with {profile['name']}")
+                                print(f"✅ [Tier 1] {profile['name']} successful")
                                 return job_data
-                        else:
-                            print(f"  ⚠️ {ver} API status {resp.status_code}")
-                    except Exception as e:
-                        print(f"  ⚠️ {ver} API loop error: {str(e)}")
+                
+                # Fallback to cloudscraper
+                scraper = cloudscraper.create_scraper(
+                    browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
+                )
+                scraper.headers.update({'User-Agent': profile['ua']})
+                if 'api.naukri.com' in profile['url']:
+                    scraper.headers.update({'appid': '121', 'systemid': '121'})
+                
+                resp = scraper.get(profile['url'], timeout=12)
+                if resp.status_code == 200:
+                    job_data = self._parse_api_response(resp.json(), url)
+                    if self.validate_job_data(job_data):
+                        print(f"✅ [Tier 1] {profile['name']} successful (Cloudscraper)")
+                        return job_data
             except Exception as e:
-                print(f"  ⚠️ Session init failed for {profile['name']}: {str(e)}")
+                print(f"  ⚠️ {profile['name']} error: {str(e)}")
 
         raise Exception("Bulk API extraction failed (All profiles)")
 
@@ -151,7 +153,7 @@ class NaukriScraper(BaseScraper):
         # Company
         org = jd.get('hiringOrganization', {})
         if isinstance(org, dict):
-            job_data['company'] = org.get('name', '') or jd.get('companyName', 'Unknown Company')
+            job_data['company'] = org.get('name', '') or jd.get('companyName', jd.get('company', 'Unknown Company'))
             same_as = org.get('sameAs', '')
             if same_as:
                 job_data['company_domain'] = self.extract_domain_from_url(same_as)
@@ -167,7 +169,9 @@ class NaukriScraper(BaseScraper):
                 region = addr.get('addressRegion', '')
                 job_data['location'] = f"{city}, {region}".strip(', ') or 'Not Specified'
         if job_data['location'] == 'Not Specified':
-            job_data['location'] = jd.get('placeholders', {}).get('location', '') or jd.get('location', 'Not Specified')
+            job_data['location'] = jd.get('placeholders', {}).get('location', '') or jd.get('location', jd.get('jobLocation', 'Not Specified'))
+            if isinstance(job_data['location'], dict): # Handle object location
+                job_data['location'] = job_data['location'].get('label', 'Not Specified')
 
         # Salary
         salary_data = jd.get('baseSalary', {})
@@ -268,45 +272,35 @@ class NaukriScraper(BaseScraper):
             if og_desc and og_desc.get('content'):
                 job_data['description'] = og_desc['content'].strip()
 
-        # --- Strategy C: window.__PRELOADED_STATE__ / jobDetailsResp ---
-        if job_data['description'] == 'No description available':
-            for script in soup.find_all('script'):
-                if not script.string: continue
-                
-                # Option 1: window.__PRELOADED_STATE__ / jobDetailsResp
-                if 'window.__PRELOADED_STATE__' in script.string or 'jobDetailsResp' in script.string:
-                    try:
-                        # Extract the largest JSON-like block in the script
-                        match = re.search(r'(\{.*\})', script.string)
-                        if match:
-                            data = json.loads(match.group(1))
-                            # Try multiple possible keys for job details
-                            state = data.get('state', data)
-                            jd = state.get('jobDetails', state.get('jobDetailsResp', {}))
-                            if not jd and 'data' in state: jd = state['data']
-                            
-                            if jd:
-                                parsed = self._parse_api_response(jd, url)
-                                if self.validate_job_data(parsed):
-                                    print("✅ [Tier 2] Preloaded State parsed successfully")
-                                    return parsed
-                    except Exception: pass
-
-        # --- Strategy D: Density-Based Brute-Force Script Scan ---
+        # --- Strategy D: Density-Based Balanced JSON Scan ---
         if job_data['description'] == 'No description available':
             try:
                 for script in soup.find_all('script'):
-                    if script.string and 'jobDescription' in script.string:
-                        # Find the JSON object that contains jobDescription
-                        # We use a greedy regex and check for valid JSON
-                        matches = re.findall(r'(\{[^{}]*?"jobDescription"[^{}]*?\})', script.string)
-                        for m in matches:
-                            try:
-                                jd_block = json.loads(m)
-                                if jd_block.get('jobDescription') or jd_block.get('description'):
-                                    print("✅ [Tier 2] Density-based JSON extraction successful")
-                                    return self._parse_api_response(jd_block, url)
-                            except: continue
+                    content = script.string
+                    if content and 'jobDescription' in content:
+                        # Find all occurrences of "jobDescription"
+                        indices = [m.start() for m in re.finditer('jobDescription', content)]
+                        for idx in indices:
+                            # Search backwards for '{' and forwards for '}' to find a potential JSON block
+                            # A simple balanced brace approach
+                            start_node = content.rfind('{', 0, idx)
+                            if start_node == -1: continue
+                            
+                            stack = []
+                            for i in range(start_node, len(content)):
+                                if content[i] == '{': stack.append('{')
+                                elif content[i] == '}':
+                                    if stack: stack.pop()
+                                    if not stack:
+                                        # Potential JSON object found
+                                        try:
+                                            jd_block = json.loads(content[start_node:i+1])
+                                            if jd_block.get('jobDescription') or jd_block.get('description'):
+                                                print("✅ [Tier 2] Balanced Density JSON extraction successful")
+                                                parsed = self._parse_api_response(jd_block, url)
+                                                if self.validate_job_data(parsed): return parsed
+                                        except: pass
+                                        break
             except Exception: pass
 
         # --- Strategy D: HTML selector fallbacks ---
