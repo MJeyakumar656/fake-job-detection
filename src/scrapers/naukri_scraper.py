@@ -77,19 +77,20 @@ class NaukriScraper(BaseScraper):
     #  Tier 1 — Cloudscraper session + Naukri API
     # ------------------------------------------------------------------ #
     def _scrape_via_api(self, url, job_id):
-        """Hit Naukri's robust internal jobapi/v3 using a cloudscraper session."""
+        """Hit Naukri's robust internal jobapi using v4 (latest) and v3 (fallback)."""
         if not job_id:
             raise Exception("Could not extract job ID from URL")
 
-        # Use the most robust internal API endpoint (v4)
-        api_url = f"https://www.naukri.com/jobapi/v4/job/{job_id}"
+        scraper = cloudscraper.create_scraper(
+            browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
+        )
         
-        # Specific headers required to bypass 406 Not Acceptable errors
-        headers = self.headers.copy()
-        headers.update({
-            'Client-Id': 'd369c73d-82d8-4f51-b8f4-6f0925c34537',
-            'App-Id': '122',
-            'System-Id': '122',
+        # Tier 1a: Try v4 API
+        api_v4 = f"https://www.naukri.com/jobapi/v4/job/{job_id}"
+        headers_v4 = self.headers.copy()
+        headers_v4.update({
+            'appid': '109',
+            'systemid': '109',
             'Accept': 'application/json',
             'Content-Type': 'application/json',
             'Referer': f'https://www.naukri.com/job-listings-{job_id}',
@@ -97,34 +98,37 @@ class NaukriScraper(BaseScraper):
         })
         
         try:
-            print(f"🔄 [Tier 1] Querying Naukri v4 API: {api_url}")
-            # Use cloudscraper for initial session
-            scraper = cloudscraper.create_scraper(
-                browser={
-                    'browser': 'chrome',
-                    'platform': 'windows',
-                    'desktop': True
-                }
-            )
-            
-            # Optional: Visit home first to get session cookies if needed
-            # scraper.get("https://www.naukri.com/", timeout=10)
-            
-            response = scraper.get(api_url, headers=headers, timeout=15)
-            print(f"  API status: {response.status_code}")
-            
+            print(f"🔄 [Tier 1a] Querying Naukri v4 API: {api_v4}")
+            response = scraper.get(api_v4, headers=headers_v4, timeout=12)
             if response.status_code == 200:
                 data = response.json()
-                print("✅ [Tier 1] v3 API extraction successful")
-                return self._parse_api_response(data, url)
-            
-            elif response.status_code == 406:
-                raise Exception("API returned 406: System requires higher-level verification or session cookies")
+                job_data = self._parse_api_response(data, url)
+                if self.validate_job_data(job_data):
+                    print("✅ [Tier 1a] v4 API extraction successful")
+                    return job_data
             else:
-                raise Exception(f"API failed with status {response.status_code}")
-                
+                print(f"  ⚠️ v4 API returned status {response.status_code}")
         except Exception as e:
-            raise Exception(f"v3 API Exception: {str(e)}")
+            print(f"  ⚠️ v4 API error: {str(e)}")
+
+        # Tier 1b: Try v3 API (Fallback)
+        api_v3 = f"https://www.naukri.com/jobapi/v3/job/{job_id}"
+        headers_v3 = headers_v4.copy()
+        headers_v3.update({'appid': '121', 'systemid': '121'})
+        
+        try:
+            print(f"🔄 [Tier 1b] Querying Naukri v3 API (Fallback): {api_v3}")
+            response = scraper.get(api_v3, headers=headers_v3, timeout=12)
+            if response.status_code == 200:
+                data = response.json()
+                job_data = self._parse_api_response(data, url)
+                if self.validate_job_data(job_data):
+                    print("✅ [Tier 1b] v3 API extraction successful")
+                    return job_data
+        except Exception as e:
+            print(f"  ⚠️ v3 API error: {str(e)}")
+
+        raise Exception("Bulk API extraction failed (both v4 and v3)")
 
     def _parse_api_response(self, data, url):
         """Parse Naukri API v4 JSON response into job_data dict."""
@@ -323,7 +327,23 @@ class NaukriScraper(BaseScraper):
                 
                 # CRITICAL: Wait for Cloudflare/antibot JS challenge to resolve
                 print(f"  ⏳ Waiting for potential Cloudflare challenge to resolve (Attempt {attempt+1})...")
-                time.sleep(12) # Increased for Render stability
+                time.sleep(18) # Maximum for Render stability
+                
+                # Check if we're still on a challenge page
+                try:
+                    page_text = driver.find_element(By.TAG_NAME, "body").text
+                    if "Checking your browser" in page_text or "Verification is taking longer" in page_text:
+                        print("  🕒 Cloudflare challenge persistent, waiting another 10s...")
+                        time.sleep(10)
+                except Exception: pass
+
+                # Trigger React lazy loading by scrolling
+                driver.execute_script("window.scrollTo(0, 500);")
+                time.sleep(2)
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(3)
+                driver.execute_script("window.scrollTo(0, 0);") 
+                time.sleep(1)
 
                 # Wait for key content to render - be more inclusive
                 try:

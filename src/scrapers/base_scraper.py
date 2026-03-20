@@ -148,16 +148,16 @@ class BaseScraper(ABC):
             from selenium import webdriver
             from selenium.webdriver.chrome.service import Service
             
-            # 3. Initialize undetected-chromedriver
-            print(f"  Launching stealth Chrome with undetected-chromedriver...")
+            # 3. Initialize memory-light but stealth-patched Chrome
+            from selenium import webdriver
             
-            # Note: We don't set binary_location on chrome_options manually anymore,
-            # uc.Chrome handles it via browser_executable_path
-            driver = uc.Chrome(
-                options=chrome_options, 
-                browser_executable_path=browser_path,
-                version_main=version_main
-            )
+            print(f"  Launching memory-optimized stealth Chrome...")
+            
+            # Using standard webdriver with uc.ChromeOptions for lower RAM usage on Render
+            if browser_path:
+                chrome_options.binary_location = browser_path
+                
+            driver = webdriver.Chrome(options=chrome_options)
 
             # Increase timeouts significantly for slow Render cold-starts
             driver.set_page_load_timeout(60)
@@ -167,9 +167,11 @@ class BaseScraper(ABC):
             try:
                 driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
                     "source": """
-                        Object.defineProperty(navigator, 'webdriver', {
-                            get: () => undefined
-                        })
+                        // Hide automation flags
+                        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                        window.chrome = { runtime: {} };
+                        Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+                        Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
                     """
                 })
             except Exception as e:
@@ -177,7 +179,7 @@ class BaseScraper(ABC):
 
             return driver
         except Exception as e:
-            raise Exception(f"Failed to initialize Selenium (UC): {str(e)}")
+            raise Exception(f"Failed to initialize Selenium (Light): {str(e)}")
     
     def extract_domain_from_url(self, url):
         """Extract domain from URL"""
