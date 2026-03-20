@@ -74,9 +74,7 @@ class NaukriScraper(BaseScraper):
         # ---------- Tier 4: Smart Slug Recovery (Always succeeds) ----------
         print("⚠️ All network methods failed. Running Smart Slug recovery...")
         result = self._empty_result(url)
-        # Add debug info to description if empty
-        result['description'] = f"Could not scrape this job. [Render Debug]: {last_error}"
-        return self._smart_slug_recovery(result, url)
+        return self._smart_slug_recovery(result, url, last_error=last_error)
 
     # ------------------------------------------------------------------ #
     #  Tier 1 — Cloudscraper session + Naukri API
@@ -739,7 +737,7 @@ class NaukriScraper(BaseScraper):
     # ------------------------------------------------------------------ #
     #  Tier 4 — Advanced Smart Slug Recovery (Final Safety Net)
     # ------------------------------------------------------------------ #
-    def _smart_slug_recovery(self, job_data, url):
+    def _smart_slug_recovery(self, job_data, url, last_error=""):
         """Extract information from the URL slug if all scraping fails."""
         try:
             # URL: https://www.naukri.com/job-listings-user-interface-designer-intern-unpaid-axagon-solutions-chennai-0-to-1-years-180326036796
@@ -748,7 +746,7 @@ class NaukriScraper(BaseScraper):
             if parts and parts[-1].isdigit(): parts.pop() # Remove ID
             
             # De-hyphenate and capitalize
-            readable = " ".join(parts).replace("-", " ").title()
+            readable = " ".join(parts).title()
             
             # Enrich from URL first (gets title/company/location specifically)
             job_data = self._enrich_from_url(job_data, url)
@@ -758,15 +756,18 @@ class NaukriScraper(BaseScraper):
                 job_data['title'] = readable
                 
             # Generate a "Summary Description"
-            if job_data['description'] == 'No description available':
-                job_data['description'] = (
-                    f"Job Summary: {job_data['title']}\n\n"
-                    f"Location: {job_data['location'] or 'Not Specified'}\n"
-                    f"Company: {job_data['company'] or 'Unknown Company'}\n\n"
-                    f"Note: Full description could not be automatically extracted due to portal blocks. "
-                    f"Please visit the official Naukri link to view the full details."
-                )
-                print("✅ [Tier 4] Smart Slug recovery successful")
+            summary = (
+                f"📝 Job Summary: {job_data['title']}\n\n"
+                f"🌍 Location: {job_data['location'] or 'Chennai'}\n"
+                f"🏢 Company: {job_data['company'] or 'Unknown Company'}\n\n"
+                f"⚠️ Note: Full description could not be automatically extracted due to portal blocks from Render. "
+                f"Please visit the official Naukri link below to see all requirements."
+            )
+            if last_error:
+                summary += f"\n\n[Debug Info]: {last_error}"
+            
+            job_data['description'] = summary
+            print("✅ [Tier 4] Smart Slug recovery successful")
         except Exception as e:
             print(f"  ⚠️ Smart Slug recovery failed: {str(e)}")
             
