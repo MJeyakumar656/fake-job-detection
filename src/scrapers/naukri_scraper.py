@@ -731,20 +731,6 @@ class NaukriScraper(BaseScraper):
         result['error'] = message
         return result
 
-    def validate_job_data(self, data):
-        """Override base validation to handle Naukri-specific placeholders."""
-        if not data: return False
-        
-        # Must have a real title and a real description
-        has_title = data.get('title', '').strip() not in ('', 'Unknown Job Title', 'Extraction Failed')
-        has_desc = data.get('description', '').strip() not in ('', 'No description available', 'Extraction Failed')
-        
-        # For main tiers, we REQUIRE a description to be considered successful
-        return has_title and has_desc
-
-    def _is_valid_result(self, result):
-        """Check if a scraping result has meaningful data (Used by main scrape loop)."""
-        return self.validate_job_data(result)
 
     def _parse_url_slug(self, url):
         """Extract job title, company, and location from Naukri URL slug.

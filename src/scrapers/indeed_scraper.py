@@ -442,10 +442,16 @@ class IndeedScraper(BaseScraper):
         return result
 
     def _is_valid_result(self, result):
-        """Check if a scraping result has meaningful data."""
-        has_title = result.get('title', '').strip() not in ('', 'Unknown Job Title')
+        """Check if a scraping result has meaningful data (v2.1)."""
+        # 1. Check for block pages
+        desc = result.get('description', '')
+        if self._is_blocked_page(desc):
+            return False
+
+        # 2. Check for minimum required content
+        has_title = result.get('title', '').strip() not in ('', 'Unknown Job Title', 'Extraction Failed')
         has_desc = (
-            result.get('description', '').strip() not in ('', 'No description available')
+            result.get('description', '').strip() not in ('', 'No description available', 'Extraction Failed')
             and len(result.get('description', '')) > 50
         )
         return has_title or has_desc

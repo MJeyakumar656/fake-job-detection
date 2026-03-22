@@ -42,21 +42,22 @@ class LinkedInScraper(BaseScraper):
                     print("🔄 Falling back to Selenium to try to access the original job...")
                     raise Exception(f"LinkedIn redirected to different job. Expected {original_job_id.group(1)}, got {scraped_job_id.group(1)}")
 
-            # Validate that we got a proper job description
-            description = job_data.get('description', '')
-            if (description and
-                description != 'No description available' and
-                len(description) > 100 and  # Must have substantial content
-                not any(skip in description.lower() for skip in [
-                    'be among the first', 'see who', 'no longer accepting',
-                    'show more jobs', 'similar jobs', 'people also viewed',
+            # Validate that we got a proper job description using global standard
+            if self._is_valid_result(job_data):
+                # Additional LinkedIn-specific checks
+                description = job_data.get('description', '').lower()
+                if not any(skip in description for skip in [
+                    'be among the first', 'no longer accepting',
                     'sign in to view', 'join now to see'
-                ])):
-                print("✅ Requests scraping successful with valid description")
-                return job_data
+                ]):
+                    print("✅ Requests scraping successful with valid description")
+                    return job_data
+                else:
+                    print("⚠️ Requests scraping got placeholder/auth-wall description, falling back to Selenium...")
+                    raise Exception("Auth-wall description from requests")
             else:
-                print("⚠️ Requests scraping got incomplete description, falling back to Selenium...")
-                raise Exception("Incomplete job description from requests")
+                print("⚠️ Requests scraping got invalid or blocked data, falling back to Selenium...")
+                raise Exception("Invalid job data from requests")
         except Exception as e:
             print(f"❌ Requests scraping failed or incomplete: {str(e)}")
             print("🔄 Falling back to Selenium...")
@@ -81,13 +82,12 @@ class LinkedInScraper(BaseScraper):
                 # Extract job data
                 job_data = self._extract_job_data(driver)
 
-                # Be more flexible with validation - accept partial data
-                if not job_data.get('title') or job_data.get('title') == 'Unknown Job Title':
-                    print("⚠️ No title found, but continuing with partial data")
-                if not job_data.get('company') or job_data.get('company') == 'Unknown Company':
-                    print("⚠️ No company found, but continuing with partial data")
-
-                return job_data
+                # Final validation
+                if self._is_valid_result(job_data):
+                    return job_data
+                else:
+                    print(f"⚠️ Selenium extraction failed validation.")
+                    return job_data # Return anyway as a last resort, or we could raise error
 
             except Exception as selenium_e:
                 error_msg = f"LinkedIn scraping error: Requests failed: {str(e)} | Selenium failed: {str(selenium_e)}"

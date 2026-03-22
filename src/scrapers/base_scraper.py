@@ -150,7 +150,60 @@ class BaseScraper(ABC):
         """Scrape job posting from URL"""
         pass
     
+    def _is_valid_result(self, result):
+        """Standard validation for all scrapers (existence + quality + block detection)."""
+        if not result: return False
+        
+        title = result.get('title', '')
+        company = result.get('company', '')
+        desc = result.get('description', '')
+        
+        # 1. Block Page Check (Highest Priority)
+        if self._is_blocked_page(title) or self._is_blocked_page(desc) or self._is_blocked_page(company):
+            print(f"  🛑 [BaseScraper] Blocked page detected in content. Invalidating tier result.")
+            return False
+            
+        # 2. Existence Check
+        has_title = title.strip() not in ('', 'Unknown Job Title', 'Extraction Failed', 'Access Denied')
+        has_desc = (
+            desc.strip() not in ('', 'No description available', 'Extraction Failed', 'Access Denied')
+            and len(desc) > 50
+        )
+        
+        if not (has_title or has_desc):
+            print(f"  ⚠️ [BaseScraper] Incomplete/placeholder data. Title='{title[:20]}...', DescLen={len(desc)}")
+            return False
+            
+        return True
+
     def validate_job_data(self, data):
-        """Validate scraped job data"""
-        required_fields = ['title', 'company', 'description', 'location']
-        return all(data.get(field) for field in required_fields)
+        """Compatibility wrapper for validate_job_data."""
+        return self._is_valid_result(data)
+
+    def _is_blocked_page(self, text):
+        """Check if the extracted text belongs to a block page (Akamai/Cloudflare)."""
+        if not text: return False
+        
+        block_markers = [
+            "Access Denied",
+            "Reference #",
+            "You don't have permission to access",
+            "The requested URL was rejected",
+            "Please verify you are a human",
+            "Cloudflare ray ID",
+            "checking your browser before accessing"
+        ]
+        
+        count = 0
+        text_lower = text.lower()
+        matched = []
+        for marker in block_markers:
+            if marker.lower() in text_lower:
+                count += 1
+                matched.append(marker)
+                
+        # If we see multiple markers or "Access Denied" specifically
+        if "access denied" in text_lower or count >= 2:
+            print(f"  🔍 [BlockCheck] DETECTED block page! Markers matched: {matched}")
+            return True
+        return False
