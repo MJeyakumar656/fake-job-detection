@@ -210,45 +210,54 @@ class BaseScraper(ABC):
 
     def _search_snippet_fallback(self, url, job_title="", company=""):
         """Last-resort fallback: Extract job description from search engine snippets."""
-        print(f"🔍 [SearchFallback] Attempting search snippet extraction for: {job_title} @ {company}")
+        print(f"🔍 [SearchFallback] {job_title} @ {company}")
         
-        # Build search query
-        query = f'site:{self.get_domain(url)} "{job_title}" "{company}"'
-        search_urls = [
-            f"https://duckduckgo.com/html/?q={requests.utils.quote(query)}",
-            f"https://www.bing.com/search?q={requests.utils.quote(query)}"
+        # Build search queries (1. Specific site, 2. Broad search)
+        domain = self.get_domain(url)
+        queries = [
+            f'site:{domain} "{job_title}" "{company}"',
+            f'"{job_title}" "{company}" job description'
         ]
         
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-            'Accept-Language': 'en-US,en;q=0.9',
-        }
+        # Search engines that are less restrictive
+        search_engine_templates = [
+            "https://duckduckgo.com/html/?q={}",
+            "https://www.bing.com/search?q={}"
+        ]
         
-        for search_url in search_urls:
-            try:
-                # Use requests for simple HTML search engines
-                resp = requests.get(search_url, headers=headers, timeout=10)
-                if resp.status_code == 200:
-                    soup = BeautifulSoup(resp.text, 'html.parser')
-                    # DuckDuckGo HTML version snippets
-                    if "duckduckgo" in search_url:
-                        snippets = soup.find_all('a', class_='result__snippet')
-                        for s in snippets:
-                            text = s.get_text().strip()
-                            if len(text) > 80:
-                                print(f"✅ [SearchFallback] Found snippet from DuckDuckGo")
-                                return text
-                    
-                    # Bing snippets (rough estimation)
-                    elif "bing" in search_url:
-                        snippets = soup.find_all('p')
-                        for s in snippets:
-                            text = s.get_text().strip()
-                            if len(text) > 100 and job_title.lower() in text.lower():
-                                print(f"✅ [SearchFallback] Found snippet from Bing")
-                                return text
-            except Exception as e:
-                print(f"  ⚠️ [SearchFallback] Search failed for {search_url}: {e}")
+        # Use cloudscraper for better bot bypass on search engines
+        import cloudscraper
+        scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
+        
+        for query in queries:
+            q_encoded = requests.utils.quote(query)
+            for template in search_engine_templates:
+                search_url = template.format(q_encoded)
+                try:
+                    resp = scraper.get(search_url, timeout=10)
+                    if resp.status_code == 200:
+                        soup = BeautifulSoup(resp.text, 'html.parser')
+                        
+                        # DuckDuckGo extraction
+                        if "duckduckgo" in search_url:
+                            snippets = soup.find_all('a', class_='result__snippet')
+                            for s in snippets:
+                                text = s.get_text().strip()
+                                if len(text) > 80:
+                                    print(f"✅ [SearchFallback] DuckDuckGo snippet found")
+                                    return text
+                        
+                        # Bing extraction
+                        elif "bing" in search_url:
+                            # Bing snippets are usually in <p> or specific classes
+                            snippets = soup.select('li.b_algo p, div.b_caption p')
+                            for s in snippets:
+                                text = s.get_text().strip()
+                                if len(text) > 100:
+                                    print(f"✅ [SearchFallback] Bing snippet found")
+                                    return text
+                except Exception as e:
+                    print(f"  ⚠️ [SearchFallback] Search failed for {search_url}: {e}")
                 
         return None
 
