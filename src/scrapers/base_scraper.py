@@ -214,12 +214,12 @@ class BaseScraper(ABC):
         
         domain = self.get_domain(url)
         queries = [
-            f'site:{domain} "{job_title}" "{company}"',
-            f'"{job_title}" "{company}" job description'
+            f'site:{domain} {job_title} {company}',
+            f'{job_title} {company} {domain} job description'
         ]
         
         search_engine_templates = [
-            "https://duckduckgo.com/html/?q={}",
+            "https://html.duckduckgo.com/html/?q={}",
             "https://www.bing.com/search?q={}"
         ]
         
