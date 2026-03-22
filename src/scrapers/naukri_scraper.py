@@ -831,28 +831,41 @@ class NaukriScraper(BaseScraper):
                     'private', 'limited', 'ltd', 'pvt', 'inc', 'corp', 'llp',
                     'technologies', 'solutions', 'systems', 'services', 'companies',
                     'software', 'infotech', 'consulting', 'labs', 'group', 'industries',
-                    'consultancy', 'advisors'
+                    'consultancy', 'advisors', 'tech', 'global', 'international',
+                    'enterprise', 'enterprises', 'foundation'
                 }
 
-                # Find the LAST occurrence of a company indicator
-                indicator_idx = -1
+                # Walk backwards through consecutive company indicators to find 
+                # the full company name chain.
+                # E.g.: [..., 'disseminare', 'consulting', 'private', 'limited']
+                #        title ends here ^    company starts here ^
+                chain_start = len(remaining)
                 for i in range(len(remaining) - 1, -1, -1):
                     if remaining[i].lower() in company_indicators:
-                        indicator_idx = i
-                        break
-
-                if indicator_idx != -1:
-                    # Heuristic: Company usually starts 1-2 words before the indicator
-                    start_idx = max(0, indicator_idx - 1)
-                    if start_idx > 0 and remaining[start_idx].lower() in {'consulting', 'technologies', 'solutions'}:
-                        start_idx -= 1
-
-                    info['title'] = ' '.join(w.capitalize() for w in remaining[:start_idx])
-                    info['company'] = ' '.join(w.capitalize() for w in remaining[start_idx:])
-                elif len(remaining) >= 4:
-                    split = len(remaining) // 2
-                    info['title'] = ' '.join(w.capitalize() for w in remaining[:split])
-                    info['company'] = ' '.join(w.capitalize() for w in remaining[split:])
+                        chain_start = i
+                    else:
+                        break  # Stop at first non-indicator word
+                
+                if chain_start < len(remaining):
+                    # Include 1 word before the indicator chain as the company's proper name
+                    # E.g., 'disseminare' before 'consulting-private-limited'
+                    company_start = max(0, chain_start - 1)
+                    
+                    # Ensure we don't consume the entire string as company
+                    if company_start > 0:
+                        info['title'] = ' '.join(w.capitalize() for w in remaining[:company_start])
+                        info['company'] = ' '.join(w.capitalize() for w in remaining[company_start:])
+                    else:
+                        # If company would consume everything, just take the last half
+                        split = max(1, len(remaining) // 2)
+                        info['title'] = ' '.join(w.capitalize() for w in remaining[:split])
+                        info['company'] = ' '.join(w.capitalize() for w in remaining[split:])
+                elif len(remaining) >= 3:
+                    # Fallback for short slugs without indicators (e.g., ["python", "developer", "indiafilings"])
+                    # Take the last word as company if len 3, else 50/50 split
+                    split_idx = len(remaining) // 2 if len(remaining) >= 4 else len(remaining) - 1
+                    info['title'] = ' '.join(w.capitalize() for w in remaining[:split_idx])
+                    info['company'] = ' '.join(w.capitalize() for w in remaining[split_idx:])
                 else:
                     info['title'] = ' '.join(w.capitalize() for w in remaining)
 
