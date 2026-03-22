@@ -778,30 +778,38 @@ class NaukriScraper(BaseScraper):
             from urllib.parse import urlparse
             path = urlparse(url).path.rstrip('/')
 
-            # URL: https://www.naukri.com/job-listings-python-developer-chennai-hinduja-tech-chennai-3-to-4-years-020326008234
-            slug = url.split("job-listings-")[-1]
+            # Use the clean path (no query params) to extract the slug
+            slug = path.split("job-listings-")[-1]
             parts = slug.split('-')
 
             # Comprehensive list of major Indian cities found in Naukri URLs
             cities = {
                 'chennai', 'bengaluru', 'bangalore', 'mumbai', 'pune', 'hyderabad', 'gurgaon', 'noida',
                 'delhi', 'new-delhi', 'kolkata', 'ahmedabad', 'surat', 'jaipur', 'lucknow', 'kanpur',
-                'nagpur', 'indore', 'thane', 'bhopal', 'visakhapatnam', 'vadodara', 'faisalabad', 'patna',
+                'nagpur', 'indore', 'thane', 'bhopal', 'visakhapatnam', 'vadodara', 'patna',
                 'ludhiana', 'agra', 'nashik', 'faridabad', 'meerut', 'rajkot', 'kalyan', 'vasai-virar',
                 'varanasi', 'srinagar', 'aurangabad', 'dhanbad', 'amritsar', 'navi-mumbai', 'allahabad',
                 'howrah', 'ranchi', 'gwalior', 'jabalpur', 'coimbatore', 'vijayawada', 'madurai', 'guwahati',
-                'chandigarh', 'hubli', 'amravati', 'jodhpur', 'tiruchirappalli', 'bareilly', 'mysore',
-                'tiruppur', 'salem', 'trichy', 'kochi', 'mangalore', 'dehradun', 'hisar'
+                'chandigarh', 'hubli', 'amravati', 'jodhpur', 'tiruchirappalli', 'tiruchirapalli',
+                'bareilly', 'mysore', 'tiruppur', 'salem', 'trichy', 'kochi', 'mangalore', 'dehradun',
+                'hisar', 'gurugram', 'ghaziabad', 'thiruvananthapuram', 'greater-noida',
+                'remote', 'work-from-home', 'india',
             }
 
-            # 1. Strip ID and Years Experience if present
-            if parts and parts[-1].isdigit(): parts.pop()
+            # 1. Strip trailing job ID (long digit string)
+            if parts and parts[-1].isdigit() and len(parts[-1]) >= 6:
+                parts.pop()
 
-            # Remove "0-to-1-years" or similar
-            if len(parts) >= 3 and parts[-3].isdigit() and parts[-2] == 'to' and parts[-1].endswith('years'):
-                parts = parts[:-3]
-            elif len(parts) >= 2 and parts[-2].isdigit() and parts[-1].endswith('years'):
-                parts = parts[:-2]
+            # 2. Strip trailing experience like "0-to-1-years" or "3-to-5-years"
+            #    When split by '-', this becomes ['0', 'to', '1', 'years'] (4 parts)
+            import re
+            tail = '-'.join(parts[-4:]) if len(parts) >= 4 else ''
+            if re.match(r'^\d+-to-\d+-years?$', tail):
+                parts = parts[:-4]
+            else:
+                tail = '-'.join(parts[-3:]) if len(parts) >= 3 else ''
+                if re.match(r'^\d+-to-\d+$', tail):
+                    parts = parts[:-3]
 
             # 2. Exhaustively strip cities from the end
             location_parts = []
