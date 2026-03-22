@@ -462,6 +462,7 @@ class NaukriScraper(BaseScraper):
                 # --- Title ---
                 title_selectors = [
                     "h1[class*='styles_jd-header-title']",
+                    "h1.styles_jd-header-title__jXv0b",
                     "h1.styles_jd-header-title__j_169", 
                     "h1.jd-header-title", 
                     "h1[class*='header-title']", 
@@ -479,6 +480,7 @@ class NaukriScraper(BaseScraper):
                 # --- Company ---
                 company_selectors = [
                     "a[class*='styles_jd-header-comp-name']",
+                    "a.styles_jd-header-comp-name__MvqAI",
                     "div[class*='styles_jd-header-comp-name']",
                     "a.styles_jd-header-comp-name__M19_L",
                     "a[title*='Careers']",
@@ -497,6 +499,8 @@ class NaukriScraper(BaseScraper):
 
                 # --- Location ---
                 location_selectors = [
+                    "span[class*='styles_jhc__location']",
+                    "span.styles_jhc__location__W_pVs",
                     "span.styles_jhc__location__W_C_W",
                     ".location a",
                     "span[class*='location']", 
@@ -513,6 +517,8 @@ class NaukriScraper(BaseScraper):
 
                 # --- Experience ---
                 experience_selectors = [
+                    "span[class*='styles_jhc__exp']",
+                    "span.styles_jhc__exp__8S7p9",
                     "span[class*='experience']",
                     "div[class*='experience']",
                 ]
@@ -527,6 +533,8 @@ class NaukriScraper(BaseScraper):
 
                 # --- Salary ---
                 salary_selectors = [
+                    "span[class*='styles_jhc__salary']",
+                    "span.styles_jhc__salary__SNEuh",
                     "span[class*='salary']",
                     "div[class*='salary']",
                 ]
@@ -540,7 +548,31 @@ class NaukriScraper(BaseScraper):
                         continue
 
                 # --- Description ---
+                # First try to click "Read more" if present
+                try:
+                    read_more_selectors = [
+                        "span.styles_read-more__6_P_x",
+                        "span[class*='styles_read-more']",
+                        "a[class*='read-more']",
+                        "button[class*='read-more']"
+                    ]
+                    for rm_sel in read_more_selectors:
+                        try:
+                            rm_btn = driver.find_element(By.CSS_SELECTOR, rm_sel)
+                            if rm_btn.is_displayed():
+                                print(f"  👆 Clicking 'Read more' button ({rm_sel})...")
+                                driver.execute_script("arguments[0].click();", rm_btn)
+                                time.sleep(2)
+                                break
+                        except: continue
+                except Exception as e:
+                    print(f"  ⚠️ Read more click failed: {e}")
+
                 desc_selectors = [
+                    "section[class*='styles_job-desc-container']",
+                    "section.styles_job-desc-container__txpYp",
+                    "div[class*='styles_jd-description']",
+                    "div.styles_jd-description__4K_x1",
                     "section.job-desc", 
                     "section[class*='job-desc']",
                     "div.styles_job-desc-container__j_V5Z",
@@ -593,6 +625,13 @@ class NaukriScraper(BaseScraper):
 
                 if job_data['title'] != 'Unknown Job Title' or job_data['description'] != 'No description available':
                     return job_data
+                
+                # Save debug HTML on failure
+                try:
+                    with open("debug_naukri_page.html", "w", encoding="utf-8") as f:
+                        f.write(driver.page_source)
+                    print("  📄 Debug page source saved to debug_naukri_page.html")
+                except: pass
                 
                 raise Exception("Page loaded but no content found")
 
