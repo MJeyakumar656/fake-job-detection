@@ -122,22 +122,28 @@ class NaukriScraper(BaseScraper):
                     'User-Agent': profile['ua'],
                     'Referer': 'https://www.google.com/'
                 })
-                # Always provide appid/systemid for Naukri APIs
-                if 'api.naukri.com' in profile['url'] or 'jobapi' in profile['url']:
-                    scraper.headers.update({
-                        'appid': '121', 
-                        'systemid': '121',
-                        'client_id': 'd369c73d-82d8-4f51-b8f4-6f0925c34537'
-                    })
                 
-                resp = scraper.get(profile['url'], timeout=12)
-                if resp.status_code == 200:
-                    job_data = self._parse_api_response(resp.json(), url)
-                    if self.validate_job_data(job_data):
-                        print(f"✅ [Tier 1] {profile['name']} successful (Cloudscraper)")
-                        return job_data
-                else:
-                    print(f"  ⚠️ {profile['name']} status {resp.status_code}")
+                # Try multiple appid/systemid combinations (Rotating Headers)
+                auth_profiles = [
+                    {'appid': '121', 'systemid': '121', 'client_id': 'd369c73d-82d8-4f51-b8f4-6f0925c34537'},
+                    {'appid': '109', 'systemid': 'Naukri', 'client_id': 'd369c73d-82d8-4f51-b8f4-6f0925c34537'},
+                ]
+                
+                success = False
+                for auth in auth_profiles:
+                    if 'api.naukri.com' in profile['url'] or 'jobapi' in profile['url']:
+                        scraper.headers.update(auth)
+                    
+                    resp = scraper.get(profile['url'], timeout=12)
+                    if resp.status_code == 200:
+                        job_data = self._parse_api_response(resp.json(), url)
+                        if self.validate_job_data(job_data):
+                            print(f"✅ [Tier 1] {profile['name']} successful with appid={auth['appid']}")
+                            return job_data
+                    elif resp.status_code == 403:
+                        continue # Try next auth profile
+                    else:
+                        print(f"  ⚠️ {profile['name']} status {resp.status_code} for appid={auth['appid']}")
             except Exception as e:
                 print(f"  ⚠️ {profile['name']} error: {str(e)}")
 
@@ -621,18 +627,34 @@ class NaukriScraper(BaseScraper):
                             if hydrated_data and self._is_valid_result(hydrated_data):
                                 return hydrated_data
 
-                        # Stage 1: Search for 'Job description' or 'Job Overview' heading and extract block
-                        headings = ["Job description", "Job Overview", "About the job"]
+                        # Stage 1: Last Ghasp field recovery
+                        # Title
+                        if job_data['title'] == 'Unknown Job Title':
+                            lines = text.split("\n")
+                            for line in lines[:5]: # Check first 5 lines for title
+                                if len(line.strip()) > 10 and len(line.strip()) < 100:
+                                    job_data['title'] = line.strip()
+                                    break
+                        
+                        # Company
+                        if job_data['company'] == 'Unknown Company':
+                            match = re.search(r'About\s+(.*?)\s+', text, re.I)
+                            if match: job_data['company'] = match.group(1).strip()
+
+                        # Description Search
+                        headings = ["Job description", "Job Overview", "About the job", "Roles and Responsibilities"]
                         for heading in headings:
-                            if heading in text:
-                                parts = text.split(heading, 1)
+                            if heading.lower() in text.lower():
+                                # Case insensitive split
+                                pattern = re.compile(re.escape(heading), re.IGNORECASE)
+                                parts = pattern.split(text, 1)
                                 if len(parts) > 1:
-                                    potential_desc = parts[1].split("Role", 1)[0].split("About Company", 1)[0].split("Required", 1)[0].split("Requirements", 1)[0].strip()
+                                    potential_desc = parts[1].split("Role", 1)[0].split("About Company", 1)[0].strip()
                                     if len(potential_desc) > 150:
                                         job_data['description'] = potential_desc
                                         break
                         
-                        # Stage 2: If still missing, look for ANY large text block (>500 chars)
+                        # Stage 2: If still missing description, look for ANY large text block (>200 chars)
                         if job_data['description'] == 'No description available':
                             paragraphs = text.split("\n\n")
                             best_p = max(paragraphs, key=len, default="")
@@ -909,44 +931,53 @@ class NaukriScraper(BaseScraper):
         return None
 
     def _parse_next_js_hydration(self, html, url):
-        """Parse Next.js self.__next_f.push hydration stream for job details."""
+        """Parse Next.js self.__next_f.push hydration stream for job details (v2.6 Optimized)."""
         try:
-            # Look for job details in the combined script tags
-            # We use loose regex to find keys regardless of structure
             job_data = self._empty_result(url)
             
             # Find all strings in the Next flow
-            # Format is usually: self.__next_f.push([1,"index:payload"])
+            # The data is often split across multiple self.__next_f.push calls
             payloads = re.findall(r'self\.__next_f\.push\(\[.*?,(?:"|`)(.*?)(?:"|`)\]\)', html, re.DOTALL)
+            
+            # Handle standard script tags too (Preloaded State)
+            scripts = re.findall(r'<script id="__NEXT_DATA__".*?>(.*?)</script>', html, re.DOTALL)
+            payloads.extend(scripts)
+            
             combined = "".join(payloads).replace('\\"', '"').replace('\\\\', '\\')
             
             if not combined: return None
 
-            # Look for Title
-            title_match = re.search(r'"title"\s*:\s*"(.*?)"', combined)
-            if title_match: job_data['title'] = title_match.group(1).encode('utf-8').decode('unicode_escape', 'ignore')
+            # 1. Regex Strategy for Title
+            for pattern in [r'"title"\s*:\s*"(.*?)"', r'"jobTitle"\s*:\s*"(.*?)"']:
+                match = re.search(pattern, combined)
+                if match: 
+                    job_data['title'] = match.group(1).encode('utf-8').decode('unicode_escape', 'ignore')
+                    break
             
-            # Look for Company
-            comp_match = re.search(r'"companyName"\s*:\s*"(.*?)"', combined)
-            if comp_match: job_data['company'] = comp_match.group(1).encode('utf-8').decode('unicode_escape', 'ignore')
+            # 2. Regex Strategy for Company
+            for pattern in [r'"companyName"\s*:\s*"(.*?)"', r'"hiringOrganization".*?"name"\s*:\s*"(.*?)"']:
+                match = re.search(pattern, combined, re.DOTALL)
+                if match: 
+                    job_data['company'] = match.group(1).encode('utf-8').decode('unicode_escape', 'ignore')
+                    break
             
-            # Look for Description (most important)
-            # Next.js often uses 'description' or 'jobDescription'
-            desc_match = re.search(r'"jobDescription"\s*:\s*"(.*?)"', combined)
-            if not desc_match:
-                desc_match = re.search(r'"description"\s*:\s*"(.*?)"', combined)
+            # 3. Regex Strategy for Description (High priority)
+            for pattern in [r'"jobDescription"\s*:\s*"(.*?)"', r'"description"\s*:\s*"(.*?)"']:
+                desc_match = re.search(pattern, combined, re.DOTALL)
+                if desc_match:
+                    raw_desc = desc_match.group(1).encode('utf-8').decode('unicode_escape', 'ignore')
+                    job_data['description'] = BeautifulSoup(raw_desc, "html.parser").get_text(separator=' ').strip()
+                    break
             
-            if desc_match:
-                # Clean up the description (Next.js payloads use heavy escaping)
-                raw_desc = desc_match.group(1).encode('utf-8').decode('unicode_escape', 'ignore')
-                # Remove HTML tags if present (sometimes it's raw text, sometimes HTML)
-                job_data['description'] = BeautifulSoup(raw_desc, "html.parser").get_text(separator=' ')
-            
-            # Look for Location
-            loc_match = re.search(r'"city"\s*:\s*"(.*?)"', combined)
-            if loc_match: job_data['location'] = loc_match.group(1)
+            # 4. Regex Strategy for Location
+            for pattern in [r'"city"\s*:\s*"(.*?)"', r'"location"\s*:\s*"(.*?)"']:
+                loc_match = re.search(pattern, combined)
+                if loc_match:
+                    job_data['location'] = loc_match.group(1).encode('utf-8').decode('unicode_escape', 'ignore')
+                    break
 
-            if job_data['title'] != 'Unknown Job Title' or len(job_data['description']) > 150:
+            # Validation: If we got at least a title and a decent description
+            if job_data['title'] != 'Unknown Job Title' and len(job_data['description']) > 150:
                 print(f"✅ Extracted data from Next.js hydration (Desc: {len(job_data['description'])} chars)")
                 return job_data
                 

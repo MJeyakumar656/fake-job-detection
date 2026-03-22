@@ -54,39 +54,32 @@ class BaseScraper(ABC):
             chrome_options.add_argument("--disable-features=IsolateOrigins,site-per-process")
             chrome_options.add_argument("--blink-settings=imagesEnabled=false") # Save bandwidth/RAM
             chrome_options.add_argument("--js-flags=--max-old-space-size=256") # Limit JS engine memory
+            # Aggressive Resource Disabling for Render (512MB RAM)
+            chrome_options.add_argument("--disable-webgl")
             chrome_options.add_argument("--disable-software-rasterizer")
-            chrome_options.add_argument("--disable-extensions")
-            chrome_options.add_argument("--disable-images")  # Don't load images for speed
-            chrome_options.add_argument("--disable-background-networking")
-            chrome_options.add_argument("--disable-default-apps")
-            chrome_options.add_argument("--disable-sync")
-            chrome_options.add_argument("--metrics-recording-only")
-            chrome_options.add_argument("--mute-audio")
-            chrome_options.add_argument("--no-first-run")
-            chrome_options.add_argument("--window-size=1280,720") # Smaller window = less memory
-
-            # 2. Enhanced anti-detection measures
-            import random
-            user_agents = [
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
-            ]
-            selected_ua = random.choice(user_agents)
-            chrome_options.add_argument(f"--user-agent={selected_ua}")
-            
-            # Disable blink features that reveal automation
-            chrome_options.add_argument("--disable-blink-features")
-            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-
-            # General security bypasses (often needed for stubborn sites)
-            chrome_options.add_argument("--disable-web-security")
-            chrome_options.add_argument("--allow-running-insecure-content")
+            chrome_options.add_argument("--disable-javascript-harmony-shipping")
+            chrome_options.add_argument("--disable-plugins-discovery")
+            chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+            chrome_options.add_argument("--disable-breakpad")
+            chrome_options.add_argument("--disable-component-update")
+            chrome_options.add_argument("--disable-domain-reliability")
+            chrome_options.add_argument("--disable-ipc-flooding-protection")
+            chrome_options.add_argument("--disable-print-preview")
+            chrome_options.add_argument("--disable-hang-monitor")
             chrome_options.add_argument("--no-pings")
-            import os
-            proxy = os.getenv('SCRAPER_PROXY')
-            if proxy:
-                print(f"🔄 Proxy configuration detected. Routing scraper through proxy.")
-                chrome_options.add_argument(f'--proxy-server={proxy}')
+            chrome_options.add_argument("--mute-audio")
+            
+            # Memory limits
+            # Lowering max space size to give the OS more breathing room on Render
+            chrome_options.add_argument("--js-flags=--max-old-space-size=128") 
+            
+            # Disable image loading completely via prefs
+            prefs = {
+                "profile.managed_default_content_settings.images": 2, 
+                "profile.default_content_settings.images": 2,
+                "profile.default_content_setting_values.notifications": 2,
+            }
+            chrome_options.add_experimental_option("prefs", prefs)
 
             # 4. Find the actual path to chromium or google-chrome
             import shutil
@@ -102,67 +95,29 @@ class BaseScraper(ABC):
                 '/usr/bin/google-chrome'
             ]
             
-            # Additional common Windows paths for local testing
             if os.name == 'nt':
                 possible_paths.extend([
                     r'C:\Program Files\Google\Chrome\Application\chrome.exe',
-                    r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
-                    r'C:\Program Files\Microsoft\Edge\Application\msedge.exe',
-                    r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
+                    r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe'
                 ])
             
             browser_path = next((p for p in possible_paths if p is not None and os.path.exists(p)), None)
             
             if browser_path:
                 print(f"✅ Setting browser executable path to: {browser_path}")
-            else:
-                print(f"⚠️ Could not find browser executable in standard paths, letting undetected_chromedriver auto-detect.")
+                chrome_options.binary_location = browser_path
             
-            # 5. Detect Chrome major version to prevent ChromeDriver version mismatch
-            import subprocess
-            version_main = None
-            if browser_path:
-                try:
-                    if os.name == 'nt':
-                        # Windows: use wmic or powershell to get version
-                        result = subprocess.run(
-                            ['powershell', '-Command', f'(Get-Item "{browser_path}").VersionInfo.FileVersion'],
-                            capture_output=True, text=True, timeout=5
-                        )
-                    else:
-                        # Linux: run the browser with --version flag
-                        result = subprocess.run(
-                            [browser_path, '--version'],
-                            capture_output=True, text=True, timeout=5
-                        )
-                    
-                    if result.stdout:
-                        import re
-                        version_match = re.search(r'(\d+)\.', result.stdout.strip())
-                        if version_match:
-                            version_main = int(version_match.group(1))
-                            print(f"✅ Detected Chrome major version: {version_main}")
-                except Exception as ver_err:
-                    print(f"⚠️ Could not detect Chrome version: {ver_err}")
-            
-            # 3. Initialize Standard Selenium (Bypassing UC to avoid hangs)
+            # 5. Initialize memory-light but stealth-patched Chrome
             from selenium import webdriver
             from selenium.webdriver.chrome.service import Service
             
-            # 3. Initialize memory-light but stealth-patched Chrome
-            from selenium import webdriver
-            
             print(f"  Launching memory-optimized stealth Chrome...")
             
-            # Using standard webdriver with uc.ChromeOptions for lower RAM usage on Render
-            if browser_path:
-                chrome_options.binary_location = browser_path
-                
             driver = webdriver.Chrome(options=chrome_options)
 
             # Increase timeouts significantly for slow Render cold-starts
-            driver.set_page_load_timeout(60)
-            driver.set_script_timeout(60)
+            driver.set_page_load_timeout(90) # Increased to 90s
+            driver.set_script_timeout(90)
             
             # Execute CDP commands to hide webdriver flag effectively
             try:

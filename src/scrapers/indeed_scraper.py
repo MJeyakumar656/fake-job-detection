@@ -49,10 +49,23 @@ class IndeedScraper(BaseScraper):
             if self._is_valid_result(result):
                 print("✅ [Tier 2] Cloudscraper scraping successful")
                 return result
-            else:
-                print("⚠️ [Tier 2] Cloudscraper returned incomplete data")
         except Exception as e:
             print(f"❌ [Tier 2] Cloudscraper failed: {e}")
+
+        # ---------- Tier 2.5: Google Cache fallback ----------
+        try:
+            print("🔄 [Tier 2.5] Attempting Google Cache fetch...")
+            # Reuse the job_id if we have it for cache query
+            cache_url = f"http://webcache.googleusercontent.com/search?q=cache:{url}"
+            scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
+            resp = scraper.get(cache_url, timeout=12)
+            if resp.status_code == 200:
+                result = self._parse_html_content(resp.content, url)
+                if self._is_valid_result(result):
+                    print("✅ [Tier 2.5] Google Cache scraping successful")
+                    return result
+        except Exception as e:
+            print(f"❌ [Tier 2.5] Google Cache failed: {e}")
 
         # ---------- Tier 3: Selenium fallback ----------
         try:
@@ -61,8 +74,6 @@ class IndeedScraper(BaseScraper):
             if self._is_valid_result(result):
                 print("✅ [Tier 3] Selenium scraping successful")
                 return result
-            else:
-                print("⚠️ [Tier 3] Selenium returned incomplete data")
         except Exception as e:
             print(f"❌ [Tier 3] Selenium failed: {e}")
 
@@ -141,7 +152,11 @@ class IndeedScraper(BaseScraper):
         response = scraper.get(url, headers=headers, timeout=15)
         response.raise_for_status()
 
-        soup = BeautifulSoup(response.content, 'html.parser')
+        return self._parse_html_content(response.content, url)
+
+    def _parse_html_content(self, html_content, url):
+        """Extract job data from Indeed HTML content (JSON-LD + Selectors)."""
+        soup = BeautifulSoup(html_content, 'html.parser')
         job_data = self._empty_result(url)
 
         # --- JSON-LD structured data ---
@@ -329,6 +344,8 @@ class IndeedScraper(BaseScraper):
                 "div#jobDescriptionText",
                 "div.jobsearch-jobDescriptionText",
                 "div[class*='JobDescription']",
+                "section[class*='jobDescription']",
+                "div[class*='details-section']",
             ]
             for sel in desc_selectors:
                 try:
@@ -338,6 +355,37 @@ class IndeedScraper(BaseScraper):
                         break
                 except Exception:
                     continue
+
+            # --- [Tier 3.5] Last Ghasp Body Scan ---
+            if job_data['description'] == 'No description available' or job_data['title'] == 'Unknown Job Title':
+                print("  ⚠️ Selectors failed. Running 'Last Ghasp' body scan...")
+                try:
+                    body_text = driver.find_element(By.TAG_NAME, "body").text
+                    
+                    # Title Recovery
+                    if job_data['title'] == 'Unknown Job Title':
+                        lines = [l.strip() for l in body_text.split("\n") if len(l.strip()) > 5]
+                        if lines: job_data['title'] = lines[0] # Grab first non-empty line
+                    
+                    # Description Recovery
+                    if job_data['description'] == 'No description available':
+                        # Look for common headers
+                        markers = ["Job details", "Full job description", "About the job"]
+                        for marker in markers:
+                            if marker in body_text:
+                                potential = body_text.split(marker, 1)[1].split("Hiring Lab", 1)[0].strip()
+                                if len(potential) > 200:
+                                    job_data['description'] = potential
+                                    break
+                        
+                        # Fallback to largest block
+                        if job_data['description'] == 'No description available':
+                            blocks = body_text.split("\n\n")
+                            best = max(blocks, key=len, default="")
+                            if len(best) > 200:
+                                job_data['description'] = best
+                except Exception as e:
+                    print(f"  ⚠️ Last Ghasp failed: {e}")
 
             return job_data
 
