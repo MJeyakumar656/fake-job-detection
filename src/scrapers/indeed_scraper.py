@@ -77,10 +77,23 @@ class IndeedScraper(BaseScraper):
         except Exception as e:
             print(f"❌ [Tier 3] Selenium failed: {e}")
 
+        # ---------- Tier 3.5: Search Snippet Fallback (New) ----------
+        try:
+            print("🔄 [Tier 3.5] Trying Search Snippet Fallback...")
+            # For Indeed, we might not have a slug, so we search by Job ID
+            if job_id:
+                snippet = self._search_snippet_fallback(url, f"indeed job {job_id}", "Indeed")
+                if snippet:
+                    result = self._empty_result(url)
+                    result['description'] = f"{snippet}\n\n[Extracted from Search Snippet]"
+                    print("✅ [Tier 3.5] Search snippet extraction successful")
+                    return result
+        except Exception as e:
+            print(f"❌ [Tier 3.5] Search fallback failed: {e}")
+
         # ---------- All tiers failed ----------
         print("❌ All scraping methods failed for Indeed")
         # Return a warning result rather than an outright error
-        # This will still trigger our AI analysis but correctly display a manual action warning
         return self._error_result(
             url,
             "Indeed's security system blocked automation. Please click the 'Text / Description' tab and manually paste the job description to run the AI analysis."

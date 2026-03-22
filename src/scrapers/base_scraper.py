@@ -207,3 +207,53 @@ class BaseScraper(ABC):
             print(f"  🔍 [BlockCheck] DETECTED block page! Markers matched: {matched}")
             return True
         return False
+
+    def _search_snippet_fallback(self, url, job_title="", company=""):
+        """Last-resort fallback: Extract job description from search engine snippets."""
+        print(f"🔍 [SearchFallback] Attempting search snippet extraction for: {job_title} @ {company}")
+        
+        # Build search query
+        query = f'site:{self.get_domain(url)} "{job_title}" "{company}"'
+        search_urls = [
+            f"https://duckduckgo.com/html/?q={requests.utils.quote(query)}",
+            f"https://www.bing.com/search?q={requests.utils.quote(query)}"
+        ]
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+        }
+        
+        for search_url in search_urls:
+            try:
+                # Use requests for simple HTML search engines
+                resp = requests.get(search_url, headers=headers, timeout=10)
+                if resp.status_code == 200:
+                    soup = BeautifulSoup(resp.text, 'html.parser')
+                    # DuckDuckGo HTML version snippets
+                    if "duckduckgo" in search_url:
+                        snippets = soup.find_all('a', class_='result__snippet')
+                        for s in snippets:
+                            text = s.get_text().strip()
+                            if len(text) > 80:
+                                print(f"✅ [SearchFallback] Found snippet from DuckDuckGo")
+                                return text
+                    
+                    # Bing snippets (rough estimation)
+                    elif "bing" in search_url:
+                        snippets = soup.find_all('p')
+                        for s in snippets:
+                            text = s.get_text().strip()
+                            if len(text) > 100 and job_title.lower() in text.lower():
+                                print(f"✅ [SearchFallback] Found snippet from Bing")
+                                return text
+            except Exception as e:
+                print(f"  ⚠️ [SearchFallback] Search failed for {search_url}: {e}")
+                
+        return None
+
+    def get_domain(self, url):
+        """Extract domain name from URL."""
+        from urllib.parse import urlparse
+        domain = urlparse(url).netloc
+        return domain.replace('www.', '')

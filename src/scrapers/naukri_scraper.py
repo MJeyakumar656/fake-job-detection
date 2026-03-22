@@ -71,6 +71,23 @@ class NaukriScraper(BaseScraper):
             last_error = str(e)
             print(f"❌ [Tier 3] Selenium failed: {e}")
 
+        # ---------- Tier 3.5: Search Snippet Fallback (New) ----------
+        try:
+            print("🔄 [Tier 3.5] Trying Search Snippet Fallback...")
+            # Use data from slug to find it on search engines
+            slug_info = self._parse_url_slug(url)
+            snippet = self._search_snippet_fallback(url, slug_info['title'], slug_info['company'])
+            if snippet:
+                result = self._empty_result(url)
+                result['title'] = slug_info['title']
+                result['company'] = slug_info['company']
+                result['location'] = slug_info['location']
+                result['description'] = f"{snippet}\n\n[Extracted from Search Snippet]"
+                print("✅ [Tier 3.5] Search snippet extraction successful")
+                return result
+        except Exception as e:
+            print(f"❌ [Tier 3.5] Search fallback failed: {e}")
+
         # ---------- Tier 4: Smart Slug Recovery (Always succeeds) ----------
         print("⚠️ All network methods failed. Running Smart Slug recovery...")
         result = self._empty_result(url)
@@ -84,11 +101,11 @@ class NaukriScraper(BaseScraper):
         if not job_id:
             raise Exception("Could not extract job ID from URL")
 
-        # Profiles to try: v4 Web API and Googlebot Cache
+        # Profiles to try: v4 Web API, Android App Emulation, and Googlebot Cache
         profiles = [
-            {'name': 'Web v4 API (appid:121)', 'url': f"https://www.naukri.com/jobapi/v4/job/{job_id}?microsite=y", 'ua': self.headers.get('User-Agent'), 'h2': True},
-            {'name': 'Web v4 API (appid:109)', 'url': f"https://www.naukri.com/jobapi/v4/job/{job_id}?microsite=y", 'ua': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36', 'h2': True},
-            {'name': 'Googlebot API', 'url': f"https://www.naukri.com/jobapi/v4/job/{job_id}", 'ua': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)', 'h2': False}
+            {'name': 'Android App API', 'url': f"https://www.naukri.com/jobapi/v4/job/{job_id}?microsite=y", 'ua': 'Naukri/1.0 (Android 11; Pixel 5)', 'h2': True, 'app': True},
+            {'name': 'Web v4 API (appid:121)', 'url': f"https://www.naukri.com/jobapi/v4/job/{job_id}?microsite=y", 'ua': self.headers.get('User-Agent'), 'h2': True, 'app': False},
+            {'name': 'Web v4 API (appid:109)', 'url': f"https://www.naukri.com/jobapi/v4/job/{job_id}?microsite=y", 'ua': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36', 'h2': True, 'app': False},
         ]
 
         for profile in profiles:
@@ -104,12 +121,16 @@ class NaukriScraper(BaseScraper):
                         headers = {
                             'User-Agent': profile['ua'],
                             'client_id': 'd369c73d-82d8-4f51-b8f4-6f0925c34537',
-                            'appid': '121' if '121' in profile['name'] else '109',
-                            'systemid': '121' if '121' in profile['name'] else '109',
+                            'appid': '109' if profile.get('app') else ('121' if '121' in profile['name'] else '109'),
+                            'systemid': 'Naukri' if profile.get('app') else ('121' if '121' in profile['name'] else '109'),
+                            'X-Requested-With': 'com.naukri.android' if profile.get('app') else None,
                             'Accept': 'application/json',
                             'Referer': 'https://www.naukri.com/',
                             'Cache-Control': 'no-cache'
                         }
+                        # Remove None values
+                        headers = {k: v for k, v in headers.items() if v is not None}
+                        
                         resp = client.get(profile['url'], headers=headers)
                         print(f"  📡 [Tier 1] {profile['name']} Status: {resp.status_code}")
                         
