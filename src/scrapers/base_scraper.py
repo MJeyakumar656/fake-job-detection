@@ -248,45 +248,41 @@ class BaseScraper(ABC):
                             for r in results:
                                 snippet_elem = r.find('a', class_='result__snippet')
                                 title_elem = r.find('a', class_='result__a')
+                                url_elem = r.find('a', class_='result__url')
                                 
                                 if snippet_elem and title_elem:
+                                    # Validate: result URL must belong to the target domain
+                                    result_url = ''
+                                    if url_elem:
+                                        result_url = url_elem.get('href', '') or url_elem.get_text()
+                                    elif title_elem.get('href'):
+                                        result_url = title_elem.get('href', '')
+                                    
+                                    if domain and domain not in result_url.lower():
+                                        continue  # Skip unrelated results
+                                    
                                     text = snippet_elem.get_text().strip()
                                     if len(text) > 80:
-                                        print(f"✅ [SearchFallback] DuckDuckGo result found")
+                                        print(f"✅ [SearchFallback] DuckDuckGo result found (domain-validated)")
                                         found_data['description'] = f"{text}\n\n[Extracted from Search Snippet]"
-                                        
-                                        # Try to extract title/company from result title: "Title at Company - Naukri.com"
-                                        res_title = title_elem.get_text()
-                                        if " - " in res_title:
-                                            parts = res_title.split(" - ")[0].split(" at ")
-                                            if len(parts) == 2:
-                                                found_data['title'] = parts[0].strip()
-                                                found_data['company'] = parts[1].strip()
-                                        
                                         return found_data
                         
                         # Bing extraction
                         elif "bing" in search_url:
                             results = soup.select('li.b_algo')
                             for r in results:
-                                title_elem = r.find('h2')
-                                snippet_elem = r.find('p')
+                                # Validate domain
+                                link_elem = r.find('a')
+                                result_url = link_elem.get('href', '') if link_elem else ''
+                                if domain and domain not in result_url.lower():
+                                    continue  # Skip unrelated results
                                 
-                                if title_elem and snippet_elem:
+                                snippet_elem = r.find('p')
+                                if snippet_elem:
                                     text = snippet_elem.get_text().strip()
                                     if len(text) > 80:
-                                        print(f"✅ [SearchFallback] Bing result found")
+                                        print(f"✅ [SearchFallback] Bing result found (domain-validated)")
                                         found_data['description'] = f"{text}\n\n[Extracted from Search Snippet]"
-                                        
-                                        # Clean title: "Title | Company | Site"
-                                        res_title = title_elem.get_text()
-                                        for sep in [" | ", " - ", " – "]:
-                                            if sep in res_title:
-                                                parts = res_title.split(sep)
-                                                if len(parts) >= 2:
-                                                    found_data['title'] = parts[0].strip()
-                                                    found_data['company'] = parts[1].strip()
-                                                break
                                         return found_data
                 except Exception as e:
                     print(f"  ⚠️ [SearchFallback] Search failed for {search_url}: {e}")

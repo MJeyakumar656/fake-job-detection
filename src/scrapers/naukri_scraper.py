@@ -74,18 +74,18 @@ class NaukriScraper(BaseScraper):
         # ---------- Tier 3.5: Search Snippet Fallback (New) ----------
         try:
             print("🔄 [Tier 3.5] Trying Search Snippet Fallback...")
-            # Use data from slug to find it on search engines
             slug_info = self._parse_url_slug(url)
             search_res = self._search_snippet_fallback(url, slug_info['title'], slug_info['company'])
             
             if search_res and search_res.get('description'):
                 result = self._empty_result(url)
-                # Use clean data from search result if available, otherwise slug
-                result['title'] = search_res.get('title') or slug_info['title']
-                result['company'] = search_res.get('company') or slug_info['company']
+                # ALWAYS use slug-parsed title/company — they come from Naukri's own URL
+                # Search results can be unrelated pages (e.g., Google policy pages)
+                result['title'] = slug_info['title']
+                result['company'] = slug_info['company']
                 result['location'] = slug_info['location']
                 result['description'] = search_res['description']
-                print(f"✅ [Tier 3.5] Search extraction successful (Title: {result['title']})")
+                print(f"✅ [Tier 3.5] Search description found. Slug title: {result['title']}")
                 return result
         except Exception as e:
             print(f"❌ [Tier 3.5] Search fallback failed: {e}")
