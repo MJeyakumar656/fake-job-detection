@@ -122,8 +122,13 @@ class NaukriScraper(BaseScraper):
                     'User-Agent': profile['ua'],
                     'Referer': 'https://www.google.com/'
                 })
-                if 'api.naukri.com' in profile['url']:
-                    scraper.headers.update({'appid': '121', 'systemid': '121'})
+                # Always provide appid/systemid for Naukri APIs
+                if 'api.naukri.com' in profile['url'] or 'jobapi' in profile['url']:
+                    scraper.headers.update({
+                        'appid': '121', 
+                        'systemid': '121',
+                        'client_id': 'd369c73d-82d8-4f51-b8f4-6f0925c34537'
+                    })
                 
                 resp = scraper.get(profile['url'], timeout=12)
                 if resp.status_code == 200:
@@ -131,6 +136,8 @@ class NaukriScraper(BaseScraper):
                     if self.validate_job_data(job_data):
                         print(f"✅ [Tier 1] {profile['name']} successful (Cloudscraper)")
                         return job_data
+                else:
+                    print(f"  ⚠️ {profile['name']} status {resp.status_code}")
             except Exception as e:
                 print(f"  ⚠️ {profile['name']} error: {str(e)}")
 
@@ -224,6 +231,13 @@ class NaukriScraper(BaseScraper):
                 
                 resp = scraper.get(url, timeout=15)
                 if resp.status_code == 200:
+                    # Try Next.js hydration parse FIRST (most complete)
+                    hydrated = self._parse_next_js_hydration(resp.text, url)
+                    if hydrated: # Even if partial, it's often better than nothing
+                        print(f"✅ [Tier 2] Next.js hydration extraction successful with {profile['name']}")
+                        return hydrated
+                    
+                    # Fallback to standard density-scan / meta tags
                     job_data = self._parse_html_content(resp.content, url)
                     if self.validate_job_data(job_data):
                         print(f"✅ [Tier 2] HTML extraction successful with {profile['name']}")
@@ -595,6 +609,18 @@ class NaukriScraper(BaseScraper):
                         body_content = driver.find_element(By.TAG_NAME, "body")
                         text = body_content.text
                         
+                        # Debug: Log first 200 chars of body text to see if it's a splash screen
+                        preview = text[:200].replace('\n', ' ') if len(text) > 200 else text.replace('\n', ' ')
+                        print(f"  📝 Body text preview: {preview}...")
+
+                        # Stage 0: Look for Next.js hydration data in source if UI hasn't rendered
+                        if len(text) < 500:
+                            print("  🔍 Body text too short, attempting Next.js hydration parse from source...")
+                            source = driver.page_source
+                            hydrated_data = self._parse_next_js_hydration(source, url)
+                            if hydrated_data and self._is_valid_result(hydrated_data):
+                                return hydrated_data
+
                         # Stage 1: Search for 'Job description' or 'Job Overview' heading and extract block
                         headings = ["Job description", "Job Overview", "About the job"]
                         for heading in headings:
@@ -880,4 +906,50 @@ class NaukriScraper(BaseScraper):
                 return self._parse_html_content(resp.content, url)
         except Exception as e:
             print(f"  ⚠️ Google Cache failed: {str(e)}")
+        return None
+
+    def _parse_next_js_hydration(self, html, url):
+        """Parse Next.js self.__next_f.push hydration stream for job details."""
+        try:
+            # Look for job details in the combined script tags
+            # We use loose regex to find keys regardless of structure
+            job_data = self._empty_result(url)
+            
+            # Find all strings in the Next flow
+            # Format is usually: self.__next_f.push([1,"index:payload"])
+            payloads = re.findall(r'self\.__next_f\.push\(\[.*?,(?:"|`)(.*?)(?:"|`)\]\)', html, re.DOTALL)
+            combined = "".join(payloads).replace('\\"', '"').replace('\\\\', '\\')
+            
+            if not combined: return None
+
+            # Look for Title
+            title_match = re.search(r'"title"\s*:\s*"(.*?)"', combined)
+            if title_match: job_data['title'] = title_match.group(1).encode('utf-8').decode('unicode_escape', 'ignore')
+            
+            # Look for Company
+            comp_match = re.search(r'"companyName"\s*:\s*"(.*?)"', combined)
+            if comp_match: job_data['company'] = comp_match.group(1).encode('utf-8').decode('unicode_escape', 'ignore')
+            
+            # Look for Description (most important)
+            # Next.js often uses 'description' or 'jobDescription'
+            desc_match = re.search(r'"jobDescription"\s*:\s*"(.*?)"', combined)
+            if not desc_match:
+                desc_match = re.search(r'"description"\s*:\s*"(.*?)"', combined)
+            
+            if desc_match:
+                # Clean up the description (Next.js payloads use heavy escaping)
+                raw_desc = desc_match.group(1).encode('utf-8').decode('unicode_escape', 'ignore')
+                # Remove HTML tags if present (sometimes it's raw text, sometimes HTML)
+                job_data['description'] = BeautifulSoup(raw_desc, "html.parser").get_text(separator=' ')
+            
+            # Look for Location
+            loc_match = re.search(r'"city"\s*:\s*"(.*?)"', combined)
+            if loc_match: job_data['location'] = loc_match.group(1)
+
+            if job_data['title'] != 'Unknown Job Title' or len(job_data['description']) > 150:
+                print(f"✅ Extracted data from Next.js hydration (Desc: {len(job_data['description'])} chars)")
+                return job_data
+                
+        except Exception as e:
+            print(f"  ⚠️ Next.js hydration parse failed: {e}")
         return None
