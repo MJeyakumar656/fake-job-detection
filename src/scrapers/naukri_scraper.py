@@ -462,8 +462,7 @@ class NaukriScraper(BaseScraper):
                 # --- Title ---
                 title_selectors = [
                     "h1[class*='styles_jd-header-title']",
-                    "h1.styles_jd-header-title__jXv0b",
-                    "h1.styles_jd-header-title__j_169", 
+                    "h1.styles_jd-header-title",
                     "h1.jd-header-title", 
                     "h1[class*='header-title']", 
                     "h1[class*='job-title']", 
@@ -480,9 +479,9 @@ class NaukriScraper(BaseScraper):
                 # --- Company ---
                 company_selectors = [
                     "a[class*='styles_jd-header-comp-name']",
-                    "a.styles_jd-header-comp-name__MvqAI",
+                    "a[class*='styles_jhc__hiring-for']",
+                    "a.styles_jd-header-comp-name",
                     "div[class*='styles_jd-header-comp-name']",
-                    "a.styles_jd-header-comp-name__M19_L",
                     "a[title*='Careers']",
                     "a[class*='comp-name']", 
                     "div[class*='comp-name'] a", 
@@ -499,9 +498,10 @@ class NaukriScraper(BaseScraper):
 
                 # --- Location ---
                 location_selectors = [
+                    "span[class*='styles_jlc__location']",
                     "span[class*='styles_jhc__location']",
-                    "span.styles_jhc__location__W_pVs",
-                    "span.styles_jhc__location__W_C_W",
+                    "span.styles_jlc__location",
+                    "span.styles_jhc__location",
                     ".location a",
                     "span[class*='location']", 
                     "div[class*='location']", 
@@ -518,7 +518,7 @@ class NaukriScraper(BaseScraper):
                 # --- Experience ---
                 experience_selectors = [
                     "span[class*='styles_jhc__exp']",
-                    "span.styles_jhc__exp__8S7p9",
+                    "span.styles_jhc__exp",
                     "span[class*='experience']",
                     "div[class*='experience']",
                 ]
@@ -534,7 +534,7 @@ class NaukriScraper(BaseScraper):
                 # --- Salary ---
                 salary_selectors = [
                     "span[class*='styles_jhc__salary']",
-                    "span.styles_jhc__salary__SNEuh",
+                    "span.styles_jhc__salary",
                     "span[class*='salary']",
                     "div[class*='salary']",
                 ]
@@ -569,14 +569,12 @@ class NaukriScraper(BaseScraper):
                     print(f"  ⚠️ Read more click failed: {e}")
 
                 desc_selectors = [
+                    "section[class*='styles_job-description']",
                     "section[class*='styles_job-desc-container']",
-                    "section.styles_job-desc-container__txpYp",
+                    "div[class*='styles_job-desc-container']",
                     "div[class*='styles_jd-description']",
-                    "div.styles_jd-description__4K_x1",
                     "section.job-desc", 
                     "section[class*='job-desc']",
-                    "div.styles_job-desc-container__j_V5Z",
-                    "div[class*='job-desc-container']",
                     "div.dang-inner-html", 
                     "div[class*='job-desc']", 
                     "div[class*='description']", 
@@ -597,13 +595,16 @@ class NaukriScraper(BaseScraper):
                         body_content = driver.find_element(By.TAG_NAME, "body")
                         text = body_content.text
                         
-                        # Stage 1: Search for 'Job description' heading and extract block
-                        if "Job description" in text:
-                            parts = text.split("Job description", 1)
-                            if len(parts) > 1:
-                                potential_desc = parts[1].split("Role", 1)[0].split("About Company", 1)[0].split("Required", 1)[0].strip()
-                                if len(potential_desc) > 150:
-                                    job_data['description'] = potential_desc
+                        # Stage 1: Search for 'Job description' or 'Job Overview' heading and extract block
+                        headings = ["Job description", "Job Overview", "About the job"]
+                        for heading in headings:
+                            if heading in text:
+                                parts = text.split(heading, 1)
+                                if len(parts) > 1:
+                                    potential_desc = parts[1].split("Role", 1)[0].split("About Company", 1)[0].split("Required", 1)[0].split("Requirements", 1)[0].strip()
+                                    if len(potential_desc) > 150:
+                                        job_data['description'] = potential_desc
+                                        break
                         
                         # Stage 2: If still missing, look for ANY large text block (>500 chars)
                         if job_data['description'] == 'No description available':
