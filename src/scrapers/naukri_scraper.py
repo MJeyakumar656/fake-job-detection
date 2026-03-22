@@ -84,11 +84,11 @@ class NaukriScraper(BaseScraper):
         if not job_id:
             raise Exception("Could not extract job ID from URL")
 
-        # Profiles to try: Browser, Googlebot, and Direct Mobile
+        # Profiles to try: v4 Web API and Googlebot Cache
         profiles = [
-            {'name': 'Direct Mobile (API.naukri.com)', 'url': f"https://api.naukri.com/v1/job/{job_id}", 'ua': 'Naukri/1.0 (Android 11)', 'h2': True},
-            {'name': 'Browser (Chrome)', 'url': f"https://www.naukri.com/jobapi/v4/job/{job_id}", 'ua': self.headers.get('User-Agent'), 'h2': False},
-            {'name': 'Googlebot', 'url': f"https://www.naukri.com/jobapi/v4/job/{job_id}", 'ua': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)', 'h2': False}
+            {'name': 'Web v4 API (appid:121)', 'url': f"https://www.naukri.com/jobapi/v4/job/{job_id}?microsite=y", 'ua': self.headers.get('User-Agent'), 'h2': True},
+            {'name': 'Web v4 API (appid:109)', 'url': f"https://www.naukri.com/jobapi/v4/job/{job_id}?microsite=y", 'ua': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36', 'h2': True},
+            {'name': 'Googlebot API', 'url': f"https://www.naukri.com/jobapi/v4/job/{job_id}", 'ua': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)', 'h2': False}
         ]
 
         for profile in profiles:
@@ -104,12 +104,14 @@ class NaukriScraper(BaseScraper):
                         headers = {
                             'User-Agent': profile['ua'],
                             'client_id': 'd369c73d-82d8-4f51-b8f4-6f0925c34537',
-                            'appid': '121',
-                            'systemid': '121',
+                            'appid': '121' if '121' in profile['name'] else '109',
+                            'systemid': '121' if '121' in profile['name'] else '109',
                             'Accept': 'application/json',
+                            'Referer': 'https://www.naukri.com/',
+                            'Cache-Control': 'no-cache'
                         }
                         resp = client.get(profile['url'], headers=headers)
-                        print(f"  📡 [Tier 1] H2 Status: {resp.status_code}")
+                        print(f"  📡 [Tier 1] {profile['name']} Status: {resp.status_code}")
                         
                         if resp.status_code == 200:
                             job_data = self._parse_api_response(resp.json(), url)
