@@ -76,14 +76,16 @@ class NaukriScraper(BaseScraper):
             print("🔄 [Tier 3.5] Trying Search Snippet Fallback...")
             # Use data from slug to find it on search engines
             slug_info = self._parse_url_slug(url)
-            snippet = self._search_snippet_fallback(url, slug_info['title'], slug_info['company'])
-            if snippet:
+            search_res = self._search_snippet_fallback(url, slug_info['title'], slug_info['company'])
+            
+            if search_res and search_res.get('description'):
                 result = self._empty_result(url)
-                result['title'] = slug_info['title']
-                result['company'] = slug_info['company']
+                # Use clean data from search result if available, otherwise slug
+                result['title'] = search_res.get('title') or slug_info['title']
+                result['company'] = search_res.get('company') or slug_info['company']
                 result['location'] = slug_info['location']
-                result['description'] = f"{snippet}\n\n[Extracted from Search Snippet]"
-                print("✅ [Tier 3.5] Search snippet extraction successful")
+                result['description'] = search_res['description']
+                print(f"✅ [Tier 3.5] Search extraction successful (Title: {result['title']})")
                 return result
         except Exception as e:
             print(f"❌ [Tier 3.5] Search fallback failed: {e}")
@@ -776,85 +778,78 @@ class NaukriScraper(BaseScraper):
             from urllib.parse import urlparse
             path = urlparse(url).path.rstrip('/')
 
-            # Remove the prefix and job ID suffix
-            slug = re.sub(r'^/job-listings-', '', path)
-            slug = re.sub(r'-\d{10,15}$', '', slug)
-
-            if not slug:
-                return info
-
-            # Remove experience suffix like "0-to-3-years"
-            slug = re.sub(r'-\d+-to-\d+-years?$', '', slug)
-
-            # Known Indian cities for location detection
-            cities = {
-                'mumbai', 'delhi', 'bangalore', 'bengaluru', 'chennai', 'hyderabad',
-                'pune', 'kolkata', 'ahmedabad', 'jaipur', 'noida', 'gurgaon',
-                'gurugram', 'ghaziabad', 'lucknow', 'chandigarh', 'indore',
-                'coimbatore', 'kochi', 'nagpur', 'bhopal', 'mysore', 'thiruvananthapuram',
-                'delhi-ncr', 'new-delhi', 'navi-mumbai', 'greater-noida',
-                'remote', 'work-from-home', 'india',
-            }
-
+            # URL: https://www.naukri.com/job-listings-python-developer-chennai-hinduja-tech-chennai-3-to-4-years-020326008234
+            slug = url.split("job-listings-")[-1]
             parts = slug.split('-')
 
-            # Try to find city by scanning from the end
+            # Comprehensive list of major Indian cities found in Naukri URLs
+            cities = {
+                'chennai', 'bengaluru', 'bangalore', 'mumbai', 'pune', 'hyderabad', 'gurgaon', 'noida',
+                'delhi', 'new-delhi', 'kolkata', 'ahmedabad', 'surat', 'jaipur', 'lucknow', 'kanpur',
+                'nagpur', 'indore', 'thane', 'bhopal', 'visakhapatnam', 'vadodara', 'faisalabad', 'patna',
+                'ludhiana', 'agra', 'nashik', 'faridabad', 'meerut', 'rajkot', 'kalyan', 'vasai-virar',
+                'varanasi', 'srinagar', 'aurangabad', 'dhanbad', 'amritsar', 'navi-mumbai', 'allahabad',
+                'howrah', 'ranchi', 'gwalior', 'jabalpur', 'coimbatore', 'vijayawada', 'madurai', 'guwahati',
+                'chandigarh', 'hubli', 'amravati', 'jodhpur', 'tiruchirappalli', 'bareilly', 'mysore',
+                'tiruppur', 'salem', 'trichy', 'kochi', 'mangalore', 'dehradun', 'hisar'
+            }
+
+            # 1. Strip ID and Years Experience if present
+            if parts and parts[-1].isdigit(): parts.pop()
+
+            # Remove "0-to-1-years" or similar
+            if len(parts) >= 3 and parts[-3].isdigit() and parts[-2] == 'to' and parts[-1].endswith('years'):
+                parts = parts[:-3]
+            elif len(parts) >= 2 and parts[-2].isdigit() and parts[-1].endswith('years'):
+                parts = parts[:-2]
+
+            # 2. Exhaustively strip cities from the end
             location_parts = []
-            remaining = list(parts)  # copy
-            for i in range(len(parts) - 1, -1, -1):
-                candidate = '-'.join(parts[i:])
-                if candidate.lower() in cities:
-                    location_parts = parts[i:]
-                    remaining = parts[:i]
-                    break
-                # Also check single word
-                if parts[i].lower() in cities:
-                    location_parts = [parts[i]]
-                    remaining = parts[:i]
-                    break
+            while parts and (parts[-1].lower() in cities or (len(parts) > 1 and f"{parts[-2]}-{parts[-1]}".lower() in cities)):
+                # Handle multi-word cities like "New Delhi" (new-delhi)
+                if len(parts) > 1 and f"{parts[-2]}-{parts[-1]}".lower() in cities:
+                    location_parts.insert(0, parts.pop())
+                    location_parts.insert(0, parts.pop())
+                else:
+                    location_parts.insert(0, parts.pop())
 
             if location_parts:
                 info['location'] = ' '.join(w.capitalize() for w in location_parts)
 
-            # Now split remaining into title and company
-            # Heuristic: company is usually the last 1-3 words before location,
-            # and title is everything before that.
+            # 3. Identify Company and Title from remaining parts
+            remaining = parts
             if remaining:
-                # Common company suffixes that help identify boundaries
                 company_indicators = {
                     'private', 'limited', 'ltd', 'pvt', 'inc', 'corp', 'llp',
                     'technologies', 'solutions', 'systems', 'services', 'companies',
-                    'software', 'infotech', 'consulting', 'labs', 'group', 'industries'
+                    'software', 'infotech', 'consulting', 'labs', 'group', 'industries',
+                    'consultancy', 'advisors'
                 }
 
-                # Try to find where the company name starts
-                company_start = None
-                
-                # First pass: try to find a known suffix, and look backwards for the start
-                for i in range(len(remaining) - 1, max(0, len(remaining) - 6), -1):
+                # Find the LAST occurrence of a company indicator
+                indicator_idx = -1
+                for i in range(len(remaining) - 1, -1, -1):
                     if remaining[i].lower() in company_indicators:
-                        # Found a suffix (like 'companies' or 'ltd'). Now scan backward to find where it starts
-                        company_start = max(0, i - 1)
-                        # Look for connector words like 'of', 'and', '&'
-                        for j in range(i - 1, max(0, i - 4), -1):
-                            if remaining[j].lower() in {'of', 'and', 'group'}:
-                                company_start = j - 1 # Include the word before the connector
-                        company_start = max(0, company_start)
+                        indicator_idx = i
                         break
 
-                if company_start is not None and company_start > 0:
-                    info['title'] = ' '.join(w.capitalize() for w in remaining[:company_start])
-                    info['company'] = ' '.join(w.capitalize() for w in remaining[company_start:])
-                elif len(remaining) >= 3:
-                    # Guess: last 2 words might be company if no specific indicator found
-                    split_idx = max(1, len(remaining) - 2)
-                    info['title'] = ' '.join(w.capitalize() for w in remaining[:split_idx])
-                    info['company'] = ' '.join(w.capitalize() for w in remaining[split_idx:])
+                if indicator_idx != -1:
+                    # Heuristic: Company usually starts 1-2 words before the indicator
+                    start_idx = max(0, indicator_idx - 1)
+                    if start_idx > 0 and remaining[start_idx].lower() in {'consulting', 'technologies', 'solutions'}:
+                        start_idx -= 1
+
+                    info['title'] = ' '.join(w.capitalize() for w in remaining[:start_idx])
+                    info['company'] = ' '.join(w.capitalize() for w in remaining[start_idx:])
+                elif len(remaining) >= 4:
+                    split = len(remaining) // 2
+                    info['title'] = ' '.join(w.capitalize() for w in remaining[:split])
+                    info['company'] = ' '.join(w.capitalize() for w in remaining[split:])
                 else:
                     info['title'] = ' '.join(w.capitalize() for w in remaining)
 
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"  ⚠️ Slug parsing error: {e}")
 
         return info
 

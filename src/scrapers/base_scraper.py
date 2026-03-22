@@ -209,23 +209,20 @@ class BaseScraper(ABC):
         return False
 
     def _search_snippet_fallback(self, url, job_title="", company=""):
-        """Last-resort fallback: Extract job description from search engine snippets."""
+        """Last-resort fallback: Extract job details from search engine snippets."""
         print(f"🔍 [SearchFallback] {job_title} @ {company}")
         
-        # Build search queries (1. Specific site, 2. Broad search)
         domain = self.get_domain(url)
         queries = [
             f'site:{domain} "{job_title}" "{company}"',
             f'"{job_title}" "{company}" job description'
         ]
         
-        # Search engines that are less restrictive
         search_engine_templates = [
             "https://duckduckgo.com/html/?q={}",
             "https://www.bing.com/search?q={}"
         ]
         
-        # Use cloudscraper for better bot bypass on search engines
         import cloudscraper
         scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
         
@@ -238,24 +235,59 @@ class BaseScraper(ABC):
                     if resp.status_code == 200:
                         soup = BeautifulSoup(resp.text, 'html.parser')
                         
+                        # Data we want to find
+                        found_data = {
+                            'description': None,
+                            'title': None,
+                            'company': None
+                        }
+
                         # DuckDuckGo extraction
                         if "duckduckgo" in search_url:
-                            snippets = soup.find_all('a', class_='result__snippet')
-                            for s in snippets:
-                                text = s.get_text().strip()
-                                if len(text) > 80:
-                                    print(f"✅ [SearchFallback] DuckDuckGo snippet found")
-                                    return text
+                            results = soup.find_all('div', class_='result')
+                            for r in results:
+                                snippet_elem = r.find('a', class_='result__snippet')
+                                title_elem = r.find('a', class_='result__a')
+                                
+                                if snippet_elem and title_elem:
+                                    text = snippet_elem.get_text().strip()
+                                    if len(text) > 80:
+                                        print(f"✅ [SearchFallback] DuckDuckGo result found")
+                                        found_data['description'] = f"{text}\n\n[Extracted from Search Snippet]"
+                                        
+                                        # Try to extract title/company from result title: "Title at Company - Naukri.com"
+                                        res_title = title_elem.get_text()
+                                        if " - " in res_title:
+                                            parts = res_title.split(" - ")[0].split(" at ")
+                                            if len(parts) == 2:
+                                                found_data['title'] = parts[0].strip()
+                                                found_data['company'] = parts[1].strip()
+                                        
+                                        return found_data
                         
                         # Bing extraction
                         elif "bing" in search_url:
-                            # Bing snippets are usually in <p> or specific classes
-                            snippets = soup.select('li.b_algo p, div.b_caption p')
-                            for s in snippets:
-                                text = s.get_text().strip()
-                                if len(text) > 100:
-                                    print(f"✅ [SearchFallback] Bing snippet found")
-                                    return text
+                            results = soup.select('li.b_algo')
+                            for r in results:
+                                title_elem = r.find('h2')
+                                snippet_elem = r.find('p')
+                                
+                                if title_elem and snippet_elem:
+                                    text = snippet_elem.get_text().strip()
+                                    if len(text) > 80:
+                                        print(f"✅ [SearchFallback] Bing result found")
+                                        found_data['description'] = f"{text}\n\n[Extracted from Search Snippet]"
+                                        
+                                        # Clean title: "Title | Company | Site"
+                                        res_title = title_elem.get_text()
+                                        for sep in [" | ", " - ", " – "]:
+                                            if sep in res_title:
+                                                parts = res_title.split(sep)
+                                                if len(parts) >= 2:
+                                                    found_data['title'] = parts[0].strip()
+                                                    found_data['company'] = parts[1].strip()
+                                                break
+                                        return found_data
                 except Exception as e:
                     print(f"  ⚠️ [SearchFallback] Search failed for {search_url}: {e}")
                 
