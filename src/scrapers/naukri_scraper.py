@@ -95,10 +95,12 @@ class NaukriScraper(BaseScraper):
             try:
                 print(f"🔄 [Tier 1] Querying {profile['name']}...")
                 
-                # Use httpx for H2 if requested
+                resp = None
+                # Use httpx for H2 if requested (High success rate for API.naukri.com)
                 if profile.get('h2'):
-                    import httpx
-                    with httpx.Client(http2=True, timeout=10) as client:
+                    try:
+                        import httpx
+                        client = httpx.Client(http2=True, timeout=12)
                         headers = {
                             'User-Agent': profile['ua'],
                             'client_id': 'd369c73d-82d8-4f51-b8f4-6f0925c34537',
@@ -107,11 +109,16 @@ class NaukriScraper(BaseScraper):
                             'Accept': 'application/json',
                         }
                         resp = client.get(profile['url'], headers=headers)
+                        print(f"  📡 [Tier 1] H2 Status: {resp.status_code}")
+                        
                         if resp.status_code == 200:
                             job_data = self._parse_api_response(resp.json(), url)
-                            if self.validate_job_data(job_data):
+                            if self._is_valid_result(job_data):
                                 print(f"✅ [Tier 1] {profile['name']} successful")
                                 return job_data
+                        client.close()
+                    except Exception as h2_err:
+                        print(f"  ⚠️ [Tier 1] H2 Client failed: {h2_err}")
                 
                 # Fallback to cloudscraper
                 scraper = cloudscraper.create_scraper(
@@ -929,44 +936,70 @@ class NaukriScraper(BaseScraper):
             scripts = re.findall(r'<script id="__NEXT_DATA__".*?>(.*?)</script>', html, re.DOTALL)
             payloads.extend(scripts)
             
-            combined = "".join(payloads).replace('\\"', '"').replace('\\\\', '\\')
-            
-            if not combined: return None
+            # Avoid over-cleaning before regex as it breaks escaped quote detection
+            combined = "".join(payloads)
+            if not combined: 
+                print("  ⚠️ Next.js: No payloads found in source")
+                return None
 
             # 1. Regex Strategy for Title
-            for pattern in [r'"title"\s*:\s*"(.*?)"', r'"jobTitle"\s*:\s*"(.*?)"']:
-                match = re.search(pattern, combined)
-                if match: 
-                    job_data['title'] = match.group(1).encode('utf-8').decode('unicode_escape', 'ignore')
-                    break
+            try:
+                for pattern in [r'"title"\s*:\s*"(.*?[^\\])"', r'"jobTitle"\s*:\s*"(.*?[^\\])"']:
+                    match = re.search(pattern, combined)
+                    if match: 
+                        job_data['title'] = match.group(1).replace('\\"', '"').replace('\\\\', '\\').encode('utf-8').decode('unicode_escape', 'ignore')
+                        break
+            except Exception as e: print(f"  ⚠️ Next.js Title parse failed: {e}")
             
             # 2. Regex Strategy for Company
-            for pattern in [r'"companyName"\s*:\s*"(.*?)"', r'"hiringOrganization".*?"name"\s*:\s*"(.*?)"']:
-                match = re.search(pattern, combined, re.DOTALL)
-                if match: 
-                    job_data['company'] = match.group(1).encode('utf-8').decode('unicode_escape', 'ignore')
-                    break
+            try:
+                for pattern in [r'"companyName"\s*:\s*"(.*?[^\\])"', r'"hiringOrganization".*?"name"\s*:\s*"(.*?[^\\])"']:
+                    match = re.search(pattern, combined, re.DOTALL)
+                    if match: 
+                        job_data['company'] = match.group(1).replace('\\"', '"').replace('\\\\', '\\').encode('utf-8').decode('unicode_escape', 'ignore')
+                        break
+            except Exception as e: print(f"  ⚠️ Next.js Company parse failed: {e}")
             
-            # 3. Regex Strategy for Description (High priority)
-            for pattern in [r'"jobDescription"\s*:\s*"(.*?)"', r'"description"\s*:\s*"(.*?)"']:
-                desc_match = re.search(pattern, combined, re.DOTALL)
-                if desc_match:
-                    raw_desc = desc_match.group(1).encode('utf-8').decode('unicode_escape', 'ignore')
-                    job_data['description'] = BeautifulSoup(raw_desc, "html.parser").get_text(separator=' ').strip()
-                    break
+            # 3. Aggressive Description Search
+            try:
+                # 3a. Precise Regex for Escaped JSON
+                for pattern in [r'"jobDescription"\s*:\s*"(.*?(?<!\\)(?:\\\\)*)"', r'"description"\s*:\s*"(.*?(?<!\\)(?:\\\\)*)"']:
+                    desc_match = re.search(pattern, combined, re.DOTALL)
+                    if desc_match:
+                        raw_desc = desc_match.group(1).replace('\\"', '"').replace('\\\\', '\\').replace('\\/', '/')
+                        try:
+                            decoded_desc = raw_desc.encode('utf-8').decode('unicode_escape', 'ignore')
+                        except:
+                            decoded_desc = raw_desc
+                        
+                        if len(decoded_desc) > 100:
+                            job_data['description'] = BeautifulSoup(decoded_desc, "html.parser").get_text(separator=' ').strip()
+                            break
+                
+                # 3b. Fallback: Take anything long and HTML-like if desc is still missing
+                if len(job_data['description']) < 100:
+                    potential_blocks = re.findall(r'>(.*?)<', combined)
+                    best_block = max(potential_blocks, key=len, default="")
+                    if len(best_block) > 500:
+                        job_data['description'] = best_block
+            except Exception as e: print(f"  ⚠️ Next.js Description parse failed: {e}")
             
             # 4. Regex Strategy for Location
-            for pattern in [r'"city"\s*:\s*"(.*?)"', r'"location"\s*:\s*"(.*?)"']:
-                loc_match = re.search(pattern, combined)
-                if loc_match:
-                    job_data['location'] = loc_match.group(1).encode('utf-8').decode('unicode_escape', 'ignore')
-                    break
+            try:
+                for pattern in [r'"city"\s*:\s*"(.*?[^\\])"', r'"location"\s*:\s*"(.*?[^\\])"', r'"cityName"\s*:\s*"(.*?)"']:
+                    loc_match = re.search(pattern, combined)
+                    if loc_match:
+                        job_data['location'] = loc_match.group(1).replace('\\"', '"').replace('\\\\', '\\').encode('utf-8').decode('unicode_escape', 'ignore')
+                        break
+            except Exception as e: print(f"  ⚠️ Next.js Location parse failed: {e}")
 
-            # Validation: If we got at least a title and a decent description
-            if job_data['title'] != 'Unknown Job Title' and len(job_data['description']) > 150:
+            # Final check - be more lenient but verify quality
+            if self._is_valid_result(job_data):
                 print(f"✅ Extracted data from Next.js hydration (Desc: {len(job_data['description'])} chars)")
                 return job_data
+            else:
+                print(f"  ⚠️ Next.js: Extraction incomplete or invalid. (Title='{job_data['title']}', DescLen={len(job_data['description'])})")
                 
         except Exception as e:
-            print(f"  ⚠️ Next.js hydration parse failed: {e}")
+            print(f"  ❌ Next.js hydration fatal error: {e}")
         return None
