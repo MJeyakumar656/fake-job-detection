@@ -9,5 +9,7 @@ services:
         value: "False"
       - key: SECRET_KEY
         generateValue: true
+      - key: SCRAPINGBEE_KEY
+        generateValue: false
     healthCheckPath: /api/health
     autoDeploy: true

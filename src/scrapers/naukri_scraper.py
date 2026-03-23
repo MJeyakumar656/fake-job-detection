@@ -28,6 +28,39 @@ class NaukriScraper(BaseScraper):
         job_id = self._extract_job_id(url)
         print(f"📋 Extracted job ID: {job_id or 'N/A'}")
 
+        # ---------- Tier 0: ScrapingBee (Primary) ----------
+        import os
+        # Read from config module if available or directly from env (fallback)
+        try:
+            from config import Config
+            sb_key = getattr(Config, 'SCRAPINGBEE_API_KEY', None) or os.environ.get('SCRAPINGBEE_KEY')
+        except ImportError:
+            sb_key = os.environ.get('SCRAPINGBEE_KEY')
+
+        if sb_key:
+            try:
+                print("🔗 [Tier 0] Scraping Naukri via ScrapingBee...")
+                resp = requests.get('https://app.scrapingbee.com/api/v1/', params={
+                    'api_key': sb_key,
+                    'url': url,
+                    'render_js': 'True',
+                    'premium_proxy': 'True',
+                    'block_resources': 'media,fonts',
+                    'wait': 5000
+                }, timeout=30)
+                
+                if resp.status_code == 200:
+                    job_data = self._parse_html_content(resp.content, url)
+                    if self._is_valid_result(job_data):
+                        print("✅ [ScrapingBee] Success!")
+                        return self._enrich_from_url(job_data, url)
+                else:
+                    print(f"⚠️ ScrapingBee returned status code {resp.status_code}")
+            except Exception as e:
+                print(f"❌ ScrapingBee failed: {e}")
+        else:
+            print("⚠️ SCRAPINGBEE_KEY not set in config/env. Skipping Tier 0.")
+
         # ---------- Tier 1: API (Fastest/Strongest) ----------
         try:
             print("🔄 [Tier 1] Trying Direct API (Mobile/H2)...")
