@@ -74,21 +74,27 @@ class BaseScraper(ABC):
             chrome_options.add_argument('--disable-backgrounding-occluded-windows')
             chrome_options.add_argument('--disable-renderer-backgrounding')
             
-            # Windows Chrome FIRST (test success ✅)
-            chrome_paths = []
-            if os.name == 'nt':
-                chrome_paths = [
-                    r'C:\Program Files\Google\Chrome\Application\chrome.exe',
-                    r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
-                    shutil.which('chrome'),
-                    shutil.which('chromium')
-                ]
-            chrome_paths += [shutil.which(p) for p in ['google-chrome', 'chromium-browser']]
-            
-            browser_path = next((p for p in chrome_paths if p and os.path.exists(p)), None)
-            if browser_path:
-                logger.info(f"Chrome path: {browser_path}")
-                chrome_options.binary_location = browser_path
+            # Render Chrome path (priority 1)
+            render_chrome = '/opt/render/project/.render/chrome/opt/google/chrome/google-chrome'
+            if os.path.exists(render_chrome):
+                chrome_options.binary_location = render_chrome
+                logger.info(f"Using Render Chrome: {render_chrome}")
+            else:
+                # Windows Chrome FIRST (test success ✅)
+                chrome_paths = []
+                if os.name == 'nt':
+                    chrome_paths = [
+                        r'C:\Program Files\Google\Chrome\Application\chrome.exe',
+                        r'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe',
+                        shutil.which('chrome'),
+                        shutil.which('chromium')
+                    ]
+                chrome_paths += [shutil.which(p) for p in ['google-chrome', 'chromium-browser'] if shutil.which(p)]
+                
+                browser_path = next((p for p in chrome_paths if p and os.path.exists(p)), None)
+                if browser_path:
+                    logger.info(f"Chrome path: {browser_path}")
+                    chrome_options.binary_location = browser_path
             
             # Prefs: No images/notifications
             prefs = {
