@@ -45,8 +45,9 @@ class NaukriScraper(BaseScraper):
                     'token': sb_key,
                     'url': url,
                     'render': 'true',
-                    'super': 'true' # Enables residential proxies on Scrape.do
-                }, timeout=30)
+                    'super': 'true', # Enables residential proxies on Scrape.do
+                    'waitUntil': 'networkidle0' # Wait for React content to load
+                }, timeout=45)
                 
                 if resp.status_code == 200:
                     job_data = self._parse_html_content(resp.content, url)
