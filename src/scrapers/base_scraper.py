@@ -236,15 +236,31 @@ class BaseScraper(ABC):
         ]
         
         import cloudscraper
+        import os
+        from config import Config
+        sb_key = getattr(Config, 'SCRAPINGBEE_API_KEY', None) or os.environ.get('SCRAPINGBEE_KEY') or os.environ.get('SCRAPE_DO_KEY')
+        
         scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
+        scraper.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36'
+        })
         
         for query in queries:
             q_encoded = requests.utils.quote(query)
             for template in search_engine_templates:
                 search_url = template.format(q_encoded)
                 try:
-                    resp = scraper.get(search_url, timeout=10)
-                    if resp.status_code == 200:
+                    resp = None
+                    # Route through Scrape.do if available to bypass DuckDuckGo's Render IP block
+                    if sb_key:
+                        resp = requests.get('http://api.scrape.do/', params={
+                            'token': sb_key,
+                            'url': search_url,
+                        }, timeout=20)
+                    else:
+                        resp = scraper.get(search_url, timeout=10)
+                        
+                    if resp and resp.status_code == 200:
                         soup = BeautifulSoup(resp.text, 'html.parser')
                         
                         # Data we want to find
