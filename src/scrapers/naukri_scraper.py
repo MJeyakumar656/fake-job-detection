@@ -28,38 +28,37 @@ class NaukriScraper(BaseScraper):
         job_id = self._extract_job_id(url)
         print(f"📋 Extracted job ID: {job_id or 'N/A'}")
 
-        # ---------- Tier 0: ScrapingBee (Primary) ----------
+        # ---------- Tier 0: Scrape.do (Primary) ----------
         import os
         # Read from config module if available or directly from env (fallback)
         try:
             from config import Config
-            sb_key = getattr(Config, 'SCRAPINGBEE_API_KEY', None) or os.environ.get('SCRAPINGBEE_KEY')
+            # Checking both variable names to be safe
+            sb_key = getattr(Config, 'SCRAPINGBEE_API_KEY', None) or os.environ.get('SCRAPINGBEE_KEY') or os.environ.get('SCRAPE_DO_KEY')
         except ImportError:
-            sb_key = os.environ.get('SCRAPINGBEE_KEY')
+            sb_key = os.environ.get('SCRAPINGBEE_KEY') or os.environ.get('SCRAPE_DO_KEY')
 
         if sb_key:
             try:
-                print("🔗 [Tier 0] Scraping Naukri via ScrapingBee...")
-                resp = requests.get('https://app.scrapingbee.com/api/v1/', params={
-                    'api_key': sb_key,
+                print("🔗 [Tier 0] Scraping Naukri via Scrape.do...")
+                resp = requests.get('http://api.scrape.do/', params={
+                    'token': sb_key,
                     'url': url,
-                    'render_js': 'True',
-                    'premium_proxy': 'True',
-                    'block_resources': 'media,fonts',
-                    'wait': 5000
+                    'render': 'true',
+                    'super': 'true' # Enables residential proxies on Scrape.do
                 }, timeout=30)
                 
                 if resp.status_code == 200:
                     job_data = self._parse_html_content(resp.content, url)
                     if self._is_valid_result(job_data):
-                        print("✅ [ScrapingBee] Success!")
+                        print("✅ [Scrape.do] Success!")
                         return self._enrich_from_url(job_data, url)
                 else:
-                    print(f"⚠️ ScrapingBee returned status code {resp.status_code}")
+                    print(f"⚠️ Scrape.do returned status code {resp.status_code} - {resp.text[:50]}")
             except Exception as e:
-                print(f"❌ ScrapingBee failed: {e}")
+                print(f"❌ Scrape.do failed: {e}")
         else:
-            print("⚠️ SCRAPINGBEE_KEY not set in config/env. Skipping Tier 0.")
+            print("⚠️ API Key not set in config/env. Skipping Tier 0.")
 
         # ---------- Tier 1: API (Fastest/Strongest) ----------
         try:
