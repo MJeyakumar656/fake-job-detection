@@ -187,25 +187,35 @@ class BaseScraper(ABC):
         if not text: return False
         
         block_markers = [
-            "Access Denied",
-            "Reference #",
-            "You don't have permission to access",
-            "The requested URL was rejected",
-            "Please verify you are a human",
-            "Cloudflare ray ID",
-            "checking your browser before accessing"
+            "access denied",
+            "reference #",
+            "you don't have permission to access",
+            "the requested url was rejected",
+            "please verify you are a human",
+            "cloudflare ray id",
+            "checking your browser before accessing",
+            "let us know you're human",
+            "let us know you’re human",
+            "check the box to let us know"
         ]
         
-        count = 0
         text_lower = text.lower()
         matched = []
         for marker in block_markers:
-            if marker.lower() in text_lower:
-                count += 1
+            if marker in text_lower:
                 matched.append(marker)
                 
-        # If we see multiple markers or "Access Denied" specifically
-        if "access denied" in text_lower or count >= 2:
+        # Strong markers that instantly indicate a block
+        strong_markers = [
+            "access denied", 
+            "let us know you're human", 
+            "let us know you’re human",
+            "check the box to let us know",
+            "please verify you are a human",
+            "checking your browser before accessing"
+        ]
+        
+        if any(m in text_lower for m in strong_markers) or len(matched) >= 2:
             print(f"  🔍 [BlockCheck] DETECTED block page! Markers matched: {matched}")
             return True
         return False
