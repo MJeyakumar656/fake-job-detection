@@ -45,8 +45,9 @@ class NaukriScraper(BaseScraper):
                     'token': sb_key,
                     'url': url,
                     'render': 'true',
-                    'super': 'true', # Enables residential proxies on Scrape.do
-                    'waitUntil': 'networkidle0' # Wait for React content to load
+                    'super': 'true', # Enables residential proxies
+                    'geoCode': 'in', # CRITICAL: Naukri blocks non-Indian IPs
+                    'waitUntil': 'networkidle0'
                 }, timeout=45)
                 
                 if resp.status_code == 200:
