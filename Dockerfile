@@ -13,7 +13,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download NLTK data during build so runtime imports don't stall
-ENV NLTK_DATA=/usr/local/share/nltk_data
+ENV NLTK_DATA=/opt/render/nltk_data
 RUN mkdir -p ${NLTK_DATA} && \
     python -m nltk.downloader -d ${NLTK_DATA} \
     punkt \

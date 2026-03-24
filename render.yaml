@@ -14,7 +14,7 @@ services:
       - key: SCRAPER_API_KEY
         generateValue: false
       - key: NLTK_DATA
-        value: /usr/local/share/nltk_data
+        value: /opt/render/nltk_data
       - key: PORT
         value: "10000"
     healthCheckPath: /health

@@ -10,6 +10,11 @@ from collections import Counter
 import math
 
 # NLTK data managed via build scripts (Dockerfile / render-build.sh)
+import nltk
+import os
+nltk_data_path = os.getenv('NLTK_DATA', '/opt/render/nltk_data')
+if nltk_data_path not in nltk.data.path:
+    nltk.data.path.append(nltk_data_path)
 
 class FeatureExtractor:
     """Extract features from job postings"""
