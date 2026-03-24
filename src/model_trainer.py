@@ -13,6 +13,13 @@ try:
 except ImportError:
     TF_AVAILABLE = False
     print("[WARN] TensorFlow not available - running in demo mode")
+
+try:
+    from imblearn.over_sampling import SMOTE
+    SMOTE_AVAILABLE = True
+except ImportError:
+    SMOTE_AVAILABLE = False
+    print("[WARN] imbalanced-learn (SMOTE) not available")
 import joblib
 from pathlib import Path
 from src.feature_extractor import FeatureExtractor
@@ -133,6 +140,17 @@ class FakeJobDetector:
     
     def train(self, X_train, y_train, X_val, y_val, epochs=50, batch_size=32):
         """Train the model"""
+        
+        # Apply SMOTE to handle class imbalance if available
+        if SMOTE_AVAILABLE:
+            print("[INFO] Applying SMOTE to balance training data...")
+            smote = SMOTE(random_state=42)
+            X_train_balanced, y_train_balanced = smote.fit_resample(X_train, y_train)
+            print(f"  ✓ Balanced data: {len(y_train)} -> {len(y_train_balanced)} samples")
+            X_train, y_train = X_train_balanced, y_train_balanced
+        else:
+            print("[WARN] Skipping SMOTE - imbalanced-learn not installed")
+            
         print("\n[INFO] Training model...")
         
         callbacks = [
