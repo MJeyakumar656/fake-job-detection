@@ -1,7 +1,9 @@
 services:
   - type: web
     name: jobguard-ai-api
-    env: docker
+    env: python
+    buildCommand: "./render-build.sh"
+    startCommand: "gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 300"
     envVars:
       - key: FLASK_ENV
         value: production
@@ -13,7 +15,5 @@ services:
         generateValue: false
       - key: SCRAPER_API_KEY
         generateValue: false
-      - key: PORT
-        value: "10000"
     healthCheckPath: /health
     autoDeploy: true

@@ -7,6 +7,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from dotenv import load_dotenv
 from routes import api_bp
+import nltk
 
 load_dotenv()
 
@@ -69,10 +70,6 @@ def setup_logging():
 @limiter.exempt
 def health():
     """Health check for Render"""
-    import nltk
-    import os
-    app.logger.info(f"NLTK Search Path: {nltk.data.path}")
-    app.logger.info(f"NLTK_DATA Env: {os.getenv('NLTK_DATA')}")
     return "API is Running", 200
 
 @app.route('/')
@@ -139,6 +136,7 @@ if __name__ == '__main__':
     debug_mode = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
     
     # Render dynamically assigns PORT, fallback to API_PORT or 10000
-    port = int(os.getenv('PORT', os.getenv('API_PORT', 10000)))
+    port = int(os.getenv('PORT', os.getenv('API_PORT', 5000)))
     
     app.run(debug=debug_mode, host='0.0.0.0', port=port)
+
