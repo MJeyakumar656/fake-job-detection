@@ -238,7 +238,8 @@ class BaseScraper(ABC):
         import cloudscraper
         import os
         from config import Config
-        sb_key = getattr(Config, 'SCRAPINGBEE_API_KEY', None) or os.environ.get('SCRAPINGBEE_KEY') or os.environ.get('SCRAPE_DO_KEY')
+        # Prioritize Scrape.do key from Config or Environment (matches Render setup)
+        sb_key = getattr(Config, 'SCRAPE_DO_KEY', None) or os.environ.get('SCRAPE_DO_KEY') or os.environ.get('SCRAPER_API_KEY')
         
         scraper = cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True})
         scraper.headers.update({

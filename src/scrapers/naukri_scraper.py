@@ -33,10 +33,10 @@ class NaukriScraper(BaseScraper):
         # Read from config module if available or directly from env (fallback)
         try:
             from config import Config
-            # Checking both variable names to be safe
-            sb_key = getattr(Config, 'SCRAPINGBEE_API_KEY', None) or os.environ.get('SCRAPINGBEE_KEY') or os.environ.get('SCRAPE_DO_KEY')
+            # Prioritize Scrape.do key from Config or Environment (matches Render setup)
+            sb_key = getattr(Config, 'SCRAPE_DO_KEY', None) or os.environ.get('SCRAPE_DO_KEY') or os.environ.get('SCRAPER_API_KEY')
         except ImportError:
-            sb_key = os.environ.get('SCRAPINGBEE_KEY') or os.environ.get('SCRAPE_DO_KEY')
+            sb_key = os.environ.get('SCRAPE_DO_KEY') or os.environ.get('SCRAPER_API_KEY')
 
         if sb_key:
             try:

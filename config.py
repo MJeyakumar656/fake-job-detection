@@ -12,7 +12,7 @@ class Config:
     # Scraping config
     SCRAPING_TIMEOUT = 10
     USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    SCRAPINGBEE_API_KEY = os.getenv('SCRAPINGBEE_KEY') or os.getenv('SCRAPE_DO_KEY')
+    SCRAPE_DO_KEY = os.getenv('SCRAPE_DO_KEY') or os.getenv('SCRAPER_API_KEY')
     
     # Job portals
     SUPPORTED_PORTALS = [

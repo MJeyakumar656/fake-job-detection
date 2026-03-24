@@ -9,9 +9,9 @@ services:
         value: "False"
       - key: SECRET_KEY
         generateValue: true
-      - key: SCRAPINGBEE_KEY
-        generateValue: false
       - key: SCRAPE_DO_KEY
+        generateValue: false
+      - key: SCRAPER_API_KEY
         generateValue: false
       - key: NLTK_DATA
         value: /usr/local/share/nltk_data
