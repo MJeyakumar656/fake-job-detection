@@ -9,10 +9,7 @@ import pandas as pd
 from collections import Counter
 import math
 
-# Download required NLTK data
-nltk.download('punkt', quiet=True)
-nltk.download('stopwords', quiet=True)
-nltk.download('averaged_perceptron_tagger', quiet=True)
+# NLTK data managed via build scripts (Dockerfile / render-build.sh)
 
 class FeatureExtractor:
     """Extract features from job postings"""

@@ -13,7 +13,13 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download NLTK data during build so runtime imports don't stall
-RUN python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords'); nltk.download('averaged_perceptron_tagger'); nltk.download('punkt_tab')"
+ENV NLTK_DATA=/usr/local/share/nltk_data
+RUN mkdir -p ${NLTK_DATA} && \
+    python -m nltk.downloader -d ${NLTK_DATA} \
+    punkt \
+    stopwords \
+    averaged_perceptron_tagger \
+    punkt_tab
 
 # Copy application source code
 COPY . .

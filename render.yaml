@@ -12,6 +12,8 @@ services:
       - key: SCRAPINGBEE_KEY
         generateValue: false
       - key: SCRAPE_DO_KEY
-        generateValue: false
+        generate_value: false
+      - key: NLTK_DATA
+        value: /usr/local/share/nltk_data
     healthCheckPath: /api/health
     autoDeploy: true
