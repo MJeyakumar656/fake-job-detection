@@ -51,7 +51,13 @@ class NaukriScraper(BaseScraper):
                 }, timeout=45)
                 
                 if resp.status_code == 200:
-                    job_data = self._parse_html_content(resp.content, url)
+                    html_source = resp.text
+                    # Try Next.js hydration first (most robust)
+                    job_data = self._parse_next_js_hydration(html_source, url)
+                    if not self._is_valid_result(job_data):
+                        # Fallback to standard HTML parsing
+                        job_data = self._parse_html_content(resp.content, url)
+                        
                     if self._is_valid_result(job_data):
                         print("✅ [Scrape.do] Success!")
                         return self._enrich_from_url(job_data, url)

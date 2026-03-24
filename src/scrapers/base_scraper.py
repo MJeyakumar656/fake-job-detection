@@ -273,45 +273,65 @@ class BaseScraper(ABC):
                         # DuckDuckGo extraction
                         if "duckduckgo" in search_url:
                             results = soup.find_all('div', class_='result')
+                            best_snippet = None
+                            
                             for r in results:
                                 snippet_elem = r.find('a', class_='result__snippet')
                                 title_elem = r.find('a', class_='result__a')
                                 url_elem = r.find('a', class_='result__url')
                                 
                                 if snippet_elem and title_elem:
-                                    # Validate: result URL must belong to the target domain
-                                    result_url = ''
-                                    if url_elem:
-                                        result_url = url_elem.get('href', '') or url_elem.get_text()
-                                    elif title_elem.get('href'):
-                                        result_url = title_elem.get('href', '')
-                                    
+                                    # Validate domain
+                                    result_url = (url_elem.get('href', '') or url_elem.get_text()) if url_elem else title_elem.get('href', '')
                                     if domain and domain not in result_url.lower():
-                                        continue  # Skip unrelated results
+                                        continue
                                     
                                     text = snippet_elem.get_text().strip()
-                                    if len(text) > 80:
-                                        print(f"✅ [SearchFallback] DuckDuckGo result found (domain-validated)")
-                                        found_data['description'] = f"{text}\n\n[Extracted from Search Snippet]"
-                                        return found_data
+                                    if len(text) < 60: continue
+                                    
+                                    # Filter out generic SEO meta-descriptions
+                                    generic_patterns = ["job description for", "apply now", "hiring for", "view details", "posted by"]
+                                    is_generic = sum(1 for p in generic_patterns if p in text.lower()) >= 2
+                                    
+                                    # Score the snippet
+                                    priority_keywords = ["responsibilities", "requirements", "skills", "experience", "role", "looking for"]
+                                    score = sum(2 for k in priority_keywords if k in text.lower())
+                                    score += len(text) / 100
+                                    if is_generic: score -= 5
+                                    
+                                    if not best_snippet or score > best_snippet['score']:
+                                        best_snippet = {'text': text, 'score': score}
+                            
+                            if best_snippet and best_snippet['score'] > -2:
+                                print(f"✅ [SearchFallback] DuckDuckGo snippet selected (Score: {best_snippet['score']:.1f})")
+                                found_data['description'] = f"{best_snippet['text']}\n\n[Extracted from Search Snippet]"
+                                return found_data
                         
                         # Bing extraction
                         elif "bing" in search_url:
                             results = soup.select('li.b_algo')
+                            best_snippet = None
+                            
                             for r in results:
-                                # Validate domain
                                 link_elem = r.find('a')
-                                result_url = link_elem.get('href', '') if link_elem else ''
-                                if domain and domain not in result_url.lower():
-                                    continue  # Skip unrelated results
+                                if domain and link_elem and domain not in link_elem.get('href', '').lower():
+                                    continue
                                 
                                 snippet_elem = r.find('p')
                                 if snippet_elem:
                                     text = snippet_elem.get_text().strip()
-                                    if len(text) > 80:
-                                        print(f"✅ [SearchFallback] Bing result found (domain-validated)")
-                                        found_data['description'] = f"{text}\n\n[Extracted from Search Snippet]"
-                                        return found_data
+                                    if len(text) < 60: continue
+                                    
+                                    score = sum(2 for k in ["requirements", "skills", "responsibilities"] if k in text.lower())
+                                    score += len(text) / 100
+                                    
+                                    if not best_snippet or score > best_snippet['score']:
+                                        best_snippet = {'text': text, 'score': score}
+                                        
+                            if best_snippet:
+                                print(f"✅ [SearchFallback] Bing snippet selected (Score: {best_snippet['score']:.1f})")
+                                found_data['description'] = f"{best_snippet['text']}\n\n[Extracted from Search Snippet]"
+                                return found_data
                 except Exception as e:
                     print(f"  ⚠️ [SearchFallback] Search failed for {search_url}: {e}")
                 
