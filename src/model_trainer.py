@@ -191,8 +191,14 @@ class FakeJobDetector:
     
     def load_model(self):
         """Load trained model and preprocessors"""
+        if not TF_AVAILABLE:
+            print("[WARN] TensorFlow not available - skipping Keras model load")
+            # We still load the preprocessors for rule-based analysis
+            self.tfidf_vectorizer = joblib.load(str(self.model_path / 'tfidf_vectorizer.pkl'))
+            self.scaler = joblib.load(str(self.model_path / 'scaler.pkl'))
+            return
+
         print("[INFO] Loading model...")
-        
         self.model = keras.models.load_model(str(self.model_path / 'fake_job_detector.h5'))
         self.tfidf_vectorizer = joblib.load(str(self.model_path / 'tfidf_vectorizer.pkl'))
         self.scaler = joblib.load(str(self.model_path / 'scaler.pkl'))
@@ -203,6 +209,12 @@ class FakeJobDetector:
         """Predict if job is fake"""
         # Extract features
         features, combined_text = self.feature_extractor.extract_all_features(job_data)
+        
+        # If model not available, return rule-based prediction from feature extractor
+        if self.model is None or not TF_AVAILABLE:
+            # The rule-based scoring is handled in JobAnalyzer._fast_prediction
+            # We just return the features here
+            return 0.5, features
         
         # Vectorize text
         X_tfidf = self.tfidf_vectorizer.transform([combined_text]).toarray()
