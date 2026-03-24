@@ -11,5 +11,7 @@ services:
         generateValue: true
       - key: SCRAPINGBEE_KEY
         generateValue: false
+      - key: SCRAPE_DO_KEY
+        generateValue: false
     healthCheckPath: /api/health
     autoDeploy: true
