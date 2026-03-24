@@ -14,7 +14,7 @@ services:
       - key: SCRAPER_API_KEY
         generateValue: false
       - key: NLTK_DATA
-        value: /opt/render/nltk_data
+        value: /app/nltk_data
       - key: PORT
         value: "10000"
     healthCheckPath: /health
