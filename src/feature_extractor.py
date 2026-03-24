@@ -3,13 +3,18 @@ import nltk
 import os
 
 # Set NLTK data path BEFORE importing corpus modules
-# Preference: Environment Variable > Docker Internal > Render Native
-nltk_data_path = os.getenv('NLTK_DATA') or '/app/nltk_data'
-if not os.path.exists(nltk_data_path):
-    nltk_data_path = '/opt/render/nltk_data'
+# Standard order: Env Var > App Relative > Home Directory > System
+common_paths = [
+    os.getenv('NLTK_DATA'),
+    os.path.join(os.getcwd(), 'nltk_data'),
+    os.path.join(os.path.expanduser('~'), 'nltk_data'),
+    '/app/nltk_data',
+    '/opt/render/nltk_data'
+]
 
-if os.path.exists(nltk_data_path) and nltk_data_path not in nltk.data.path:
-    nltk.data.path.append(nltk_data_path)
+for path in common_paths:
+    if path and os.path.exists(path) and path not in nltk.data.path:
+        nltk.data.path.append(path)
 
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
