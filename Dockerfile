@@ -1,9 +1,10 @@
 FROM python:3.11-slim
 
-# Install system dependencies, Chromium, and ChromeDriver
+# Install system dependencies, Chromium, ChromeDriver, and Unzip
 RUN apt-get update && apt-get install -y \
     chromium \
     chromium-driver \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -12,14 +13,12 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download NLTK data during build so runtime imports don't stall
+# Pre-download and UNZIP NLTK data during build
 ENV NLTK_DATA=/opt/render/nltk_data
 RUN mkdir -p ${NLTK_DATA} && \
-    python -m nltk.downloader -d ${NLTK_DATA} \
-    punkt \
-    stopwords \
-    averaged_perceptron_tagger \
-    punkt_tab
+    python -m nltk.downloader -d ${NLTK_DATA} punkt stopwords averaged_perceptron_tagger punkt_tab && \
+    cd ${NLTK_DATA}/tokenizers && unzip -o punkt.zip && unzip -o punkt_tab.zip && rm *.zip || true && \
+    cd ${NLTK_DATA}/corpora && unzip -o stopwords.zip && rm *.zip || true
 
 # Copy application source code
 COPY . .

@@ -69,6 +69,10 @@ def setup_logging():
 @limiter.exempt
 def health():
     """Health check for Render"""
+    import nltk
+    import os
+    app.logger.info(f"NLTK Search Path: {nltk.data.path}")
+    app.logger.info(f"NLTK_DATA Env: {os.getenv('NLTK_DATA')}")
     return "API is Running", 200
 
 @app.route('/')

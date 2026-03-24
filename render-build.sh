@@ -20,3 +20,5 @@ export NLTK_DATA=/opt/render/nltk_data
 mkdir -p $NLTK_DATA
 pip install --no-cache-dir -r requirements.txt
 python -m nltk.downloader -d $NLTK_DATA punkt stopwords averaged_perceptron_tagger punkt_tab
+cd $NLTK_DATA/tokenizers && unzip -o punkt.zip && unzip -o punkt_tab.zip && rm *.zip || true
+cd $NLTK_DATA/corpora && unzip -o stopwords.zip && rm *.zip || true
