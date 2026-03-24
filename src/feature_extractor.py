@@ -1,20 +1,18 @@
 import re
 import nltk
+import os
+
+# Set NLTK data path BEFORE importing corpus modules
+nltk_data_path = os.getenv('NLTK_DATA', '/opt/render/nltk_data')
+if nltk_data_path not in nltk.data.path:
+    nltk.data.path.append(nltk_data_path)
+
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from textblob import TextBlob
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 import pandas as pd
-from collections import Counter
-import math
-
-# NLTK data managed via build scripts (Dockerfile / render-build.sh)
-import nltk
-import os
-nltk_data_path = os.getenv('NLTK_DATA', '/opt/render/nltk_data')
-if nltk_data_path not in nltk.data.path:
-    nltk.data.path.append(nltk_data_path)
 
 class FeatureExtractor:
     """Extract features from job postings"""
