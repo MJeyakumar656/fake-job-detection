@@ -16,7 +16,7 @@ else
   echo "...Using Chrome from cache"
 fi
 
-export NLTK_DATA=/opt/render/project/.render/nltk_data
+export NLTK_DATA=/opt/render/nltk_data
 mkdir -p $NLTK_DATA
 pip install --no-cache-dir -r requirements.txt
 python -m nltk.downloader -d $NLTK_DATA punkt stopwords averaged_perceptron_tagger punkt_tab
