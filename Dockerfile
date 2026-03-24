@@ -31,5 +31,5 @@ ENV PYTHONUNBUFFERED=1
 
 EXPOSE 10000
 
-# Start gunicorn with preload to init app in master, generous timeout for Render
-CMD gunicorn app:app --bind 0.0.0.0:${PORT:-10000} --workers 1 --threads 2 --timeout 300 --preload
+# Start gunicorn, generous timeout for Render
+CMD gunicorn app:app --bind 0.0.0.0:${PORT:-10000} --workers 1 --threads 2 --timeout 300

@@ -12,8 +12,10 @@ services:
       - key: SCRAPINGBEE_KEY
         generateValue: false
       - key: SCRAPE_DO_KEY
-        generate_value: false
+        generateValue: false
       - key: NLTK_DATA
         value: /usr/local/share/nltk_data
-    healthCheckPath: /api/health
+      - key: PORT
+        value: "10000"
+    healthCheckPath: /health
     autoDeploy: true
