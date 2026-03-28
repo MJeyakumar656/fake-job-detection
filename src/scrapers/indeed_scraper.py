@@ -4,15 +4,18 @@ import re
 import urllib.parse
 import cloudscraper
 import requests
+import os
 from bs4 import BeautifulSoup
 
 
 class IndeedScraper(BaseScraper):
     """Scraper for Indeed.com job postings — multi-tier extraction.
 
+    Tier 0: Scrape.do (Proxy Bypass)
     Tier 1: Mobile API (less strict Cloudflare)
     Tier 2: Cloudscraper HTML (JSON-LD + HTML selectors)
     Tier 3: Selenium headless Chrome
+    Tier 4: Smart Slug Recovery (Always succeeds)
     """
 
     # ------------------------------------------------------------------ #
@@ -28,6 +31,34 @@ class IndeedScraper(BaseScraper):
         # Extract Indeed job ID from URL
         job_id = self._extract_job_id(url)
         print(f"📋 Extracted job ID: {job_id or 'N/A'}")
+
+        # ---------- Tier 0: Scrape.do (Primary) ----------
+        try:
+            from config import Config
+            sb_key = getattr(Config, 'SCRAPE_DO_KEY', None) or os.environ.get('SCRAPE_DO_KEY') or os.environ.get('SCRAPER_API_KEY')
+        except ImportError:
+            sb_key = os.environ.get('SCRAPE_DO_KEY') or os.environ.get('SCRAPER_API_KEY')
+
+        if sb_key:
+            try:
+                print("🔗 [Tier 0] Scraping Indeed via Scrape.do...")
+                resp = requests.get('http://api.scrape.do/', params={
+                    'token': sb_key,
+                    'url': url,
+                    'render': 'true',
+                    'super': 'true', 
+                    'geoCode': 'us' # Indeed is US-centric often, but can be global
+                }, timeout=45)
+                
+                if resp.status_code == 200:
+                    result = self._parse_html_content(resp.content, url)
+                    if self._is_valid_result(result):
+                        print("✅ [Tier 0] Scrape.do success!")
+                        return result
+                else:
+                    print(f"⚠️ Tier 0 returned status code {resp.status_code}")
+            except Exception as e:
+                print(f"❌ Tier 0 failed: {e}")
 
         # ---------- Tier 1: Mobile API ----------
         if job_id:
@@ -91,39 +122,41 @@ class IndeedScraper(BaseScraper):
         except Exception as e:
             print(f"❌ [Tier 3.5] Search fallback failed: {e}")
 
-        # ---------- All tiers failed ----------
-        print("❌ All scraping methods failed for Indeed")
-        # Return a warning result rather than an outright error
-        return self._error_result(
-            url,
-            "Indeed's security system blocked automation. Please click the 'Text / Description' tab and manually paste the job description to run the AI analysis."
-        )
+        # ---------- Tier 4: Smart Slug Recovery (Always succeeds) ----------
+        print("⚠️ All network methods failed. Running Smart Slug recovery...")
+        result = self._empty_result(url)
+        return self._smart_slug_recovery(result, url)
 
     # ------------------------------------------------------------------ #
     #  Tier 1 — Mobile API
     # ------------------------------------------------------------------ #
     def _scrape_via_mobile_api(self, url, job_id):
-        """Try Indeed's mobile/embedded viewjob API."""
+        """Try Indeed's mobile/embedded viewjob API with browser-like headers."""
         scraper = cloudscraper.create_scraper(
+            interpreter='nodejs',
             browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
         )
 
-        # Try multiple Indeed API variants
         api_urls = [
             f"https://www.indeed.com/m/basecamp/viewjob?viewtype=embedded&jk={job_id}",
             f"https://in.indeed.com/m/basecamp/viewjob?viewtype=embedded&jk={job_id}",
+            f"https://www.indeed.com/viewjob?jk={job_id}&spa=1",
         ]
 
         for api_url in api_urls:
             try:
                 headers = {
-                    'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 '
-                                  '(KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                     'Accept': 'application/json',
+                    'Referer': 'https://www.indeed.com/',
+                    'X-Requested-With': 'XMLHttpRequest'
                 }
-                resp = scraper.get(api_url, headers=headers, timeout=10)
+                resp = scraper.get(api_url, headers=headers, timeout=12)
                 if resp.status_code == 200:
                     data = resp.json()
+                    # Sometimes Indeed returns a "body" field with the JSON
+                    if 'body' in data and isinstance(data['body'], dict):
+                        data = data['body']
                     return self._parse_mobile_api(data, url)
             except Exception:
                 continue
@@ -148,17 +181,48 @@ class IndeedScraper(BaseScraper):
         return job_data
 
     # ------------------------------------------------------------------ #
+    #  Tier 4 — Smart Slug Recovery
+    # ------------------------------------------------------------------ #
+    def _smart_slug_recovery(self, result, url):
+        """Extract job metadata from the URL slug when all else fails."""
+        try:
+            # Example: https://www.indeed.com/viewjob?jk=abc123&q=Python+Developer&l=Remote
+            # Or: https://www.indeed.com/jobs?q=python+developer&l=new+york&vjk=...
+            parsed = urllib.parse.urlparse(url)
+            params = urllib.parse.parse_qs(parsed.query)
+
+            if 'q' in params:
+                result['title'] = params['q'][0].title()
+            if 'l' in params:
+                result['location'] = params['l'][0].title()
+
+            # If it's a direct viewjob link without 'q', try to parse the path
+            # Often URLs look like /rc/clk?jk=...&from=vjs&pos=...
+            
+            result['description'] = (
+                "Indeed's security system blocked automated extraction. "
+                "The analysis below is based on the job title found in the URL. "
+                "\n\nFor a full analysis, please click the 'Text / Description' tab and paste the description manually."
+            )
+            result['error'] = "Anti-bot triggered"
+        except:
+            pass
+        return result
+
+    # ------------------------------------------------------------------ #
     #  Tier 2 — Cloudscraper HTML
     # ------------------------------------------------------------------ #
     def _scrape_via_cloudscraper(self, url):
-        """Scrape Indeed page HTML using cloudscraper to bypass Cloudflare."""
+        """Scrape Indeed page HTML using cloudscraper with Node.js bypass."""
         scraper = cloudscraper.create_scraper(
+            interpreter='nodejs',
             browser={'browser': 'chrome', 'platform': 'windows', 'desktop': True}
         )
 
         headers = {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
+            'Referer': 'https://www.google.com/',
             'Connection': 'keep-alive',
         }
 
@@ -215,7 +279,9 @@ class IndeedScraper(BaseScraper):
         if job_data['title'] == 'Unknown Job Title':
             title_elem = (
                 soup.select_one("h1.jobsearch-JobInfoHeader-title") or
+                soup.select_one("h2.jobsearch-JobInfoHeader-title") or
                 soup.select_one("h1[class*='JobTitle']") or
+                soup.select_one("[data-testid='jobsearch-JobInfoHeader-title']") or
                 soup.find("h1")
             )
             if title_elem:
@@ -223,6 +289,8 @@ class IndeedScraper(BaseScraper):
 
         if job_data['company'] == 'Unknown Company':
             comp_elem = (
+                soup.select_one("div.jobsearch-InlineCompanyRating a") or
+                soup.select_one("[data-testid='inline-company-link']") or
                 soup.select_one("div[data-company-name='true']") or
                 soup.select_one("span[data-testid='company-name']") or
                 soup.select_one("div[class*='CompanyName']")
@@ -232,6 +300,7 @@ class IndeedScraper(BaseScraper):
 
         if job_data['location'] == 'Not Specified':
             loc_elem = (
+                soup.select_one("div.jobsearch-JobInfoHeader-subtitle > div:nth-child(2)") or
                 soup.select_one("div[data-testid='inlineHeader-companyLocation']") or
                 soup.select_one("div[data-testid='job-location']") or
                 soup.select_one("div[class*='CompanyLocation']")
@@ -243,7 +312,8 @@ class IndeedScraper(BaseScraper):
             desc_elem = (
                 soup.select_one("div#jobDescriptionText") or
                 soup.select_one("div.jobsearch-jobDescriptionText") or
-                soup.select_one("div[class*='JobDescription']")
+                soup.select_one("div[class*='JobDescription']") or
+                soup.select_one("section[class*='jobDescription']")
             )
             if desc_elem:
                 job_data['description'] = desc_elem.get_text(separator="\n").strip()

@@ -4,13 +4,27 @@ import os
 
 # Set NLTK data path BEFORE importing corpus modules
 # Preference: Environment Variable > App Relative > Home Directory > System
-nltk_data_path = os.getenv('NLTK_DATA') or os.path.join(os.path.expanduser('~'), 'nltk_data')
-if not os.path.exists(nltk_data_path):
-    # Fallback for Render native/docker hybrid environments
-    nltk_data_path = '/app/nltk_data' if os.path.exists('/app') else '/opt/render/nltk_data'
+nltk_data_path = os.getenv('NLTK_DATA')
+
+# Fallback path logic
+if not nltk_data_path:
+    home_nltk_data = os.path.join(os.path.expanduser('~'), 'nltk_data')
+    if os.path.exists(home_nltk_data):
+        nltk_data_path = home_nltk_data
+    else:
+        # For Render/Linux environments, use their preferred paths
+        if os.name != 'nt':
+            if os.path.exists('/app'):
+                nltk_data_path = '/app/nltk_data'
+            elif os.path.exists('/opt/render/nltk_data'):
+                nltk_data_path = '/opt/render/nltk_data'
+        
+        # Final fallback: default home directory (even if it doesn't exist yet)
+        if not nltk_data_path:
+            nltk_data_path = home_nltk_data
 
 # Ensure the data path is in NLTK's search list
-if nltk_data_path not in nltk.data.path:
+if nltk_data_path and nltk_data_path not in nltk.data.path:
     nltk.data.path.insert(0, nltk_data_path)
 
 # Self-healing download function (only runs if resources are missing)
@@ -25,10 +39,13 @@ def ensure_nltk_resources():
                 nltk.tokenize.word_tokenize("test")
             else:
                 nltk.data.find(f'corpora/{res}' if res == 'stopwords' else f'tokenizers/{res}' if 'punkt' in res else res)
-        except (LookupError, AttributeError, ImportError):
+        except (LookupError, AttributeError, ImportError, OSError):
             print(f"⚠️ [NLTK] Resource '{res}' not found. Downloading to {nltk_data_path}...")
-            os.makedirs(nltk_data_path, exist_ok=True)
-            nltk.download(res, download_dir=nltk_data_path, quiet=True)
+            try:
+                os.makedirs(nltk_data_path, exist_ok=True)
+                nltk.download(res, download_dir=nltk_data_path, quiet=True)
+            except Exception as e:
+                print(f"❌ [NLTK] Failed to download {res}: {e}")
 
 # Run resource check
 ensure_nltk_resources()
