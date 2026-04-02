@@ -248,6 +248,12 @@ class LinkedInScraper(BaseScraper):
             return job_data
             
         except Exception as e:
+            # Re-check description for common LinkedIn noise if it passed basic validation
+            desc = job_data.get('description', '').lower()
+            if 'open jobs' in desc or 'similar jobs' in desc or 'related searches' in desc:
+                 print("⚠️ Detected job-listing noise in description, forcing Selenium fallback...")
+                 raise Exception("LinkedIn noise in requests result")
+
             raise Exception(f"Failed to extract LinkedIn job data: {str(e)}")
     
     def _get_description(self, driver):
@@ -367,9 +373,11 @@ class LinkedInScraper(BaseScraper):
                 # Most specific selector for the actual job description content
                 "div.description__text.description__text--rich div.show-more-less-html__markup",
                 "section.description div.description__text.description__text--rich div.show-more-less-html__markup",
+                # The primary container excluding potential recommendation sidebars
+                "main .description__text",
+                "article.jobs-description__container",
                 # Try expanded content after clicking show more
-                "div.description__text div.show-more-less-html__markup:not(.show-more-less-html__markup--clamp-after-5)",
-                "div.description__text div.show-more-less-html__markup.show-more-less-html__markup--clamp-after-5"
+                "div.description__text div.show-more-less-html__markup:not(.show-more-less-html__markup--clamp-after-5)"
             ]
 
             for selector in main_description_selectors:
@@ -763,14 +771,13 @@ class LinkedInScraper(BaseScraper):
             if job_data['description'] == 'No description available':
                 # Try multiple selectors for job description content
                 description_selectors = [
+                    # Main content area
+                    'main .description__text', 
                     'div.description__text.description__text--rich div.show-more-less-html__markup',
-                    'div.description__text div.show-more-less-html__markup:not(.show-more-less-html__markup--clamp-after-5)',
-                    'div.description__text div.show-more-less-html__markup.show-more-less-html__markup--clamp-after-5',
-                    'section.description div.description__text.description__text--rich div.show-more-less-html__markup',
-                    'div[data-test-id="job-details-about-the-job-module"]',
-                    'section[data-test-id="job-details-about-the-job-module"]',
-                    'div.job-details-about-the-job-module',
-                    'div.job-details-jobs-unified-top-card__description-container'
+                    '.jobs-description__content',
+                    # Backup selectors
+                    'article.jobs-description__container',
+                    'section.description div.description__text'
                 ]
 
                 for selector in description_selectors:

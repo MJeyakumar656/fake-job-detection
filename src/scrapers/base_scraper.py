@@ -1,4 +1,5 @@
 import requests
+import re
 from bs4 import BeautifulSoup
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
@@ -106,7 +107,28 @@ class BaseScraper(ABC):
             chrome_options.add_experimental_option("prefs", prefs)
             
             logger.info("Creating stealth driver...")
-            driver = uc.Chrome(options=chrome_options)  # uc auto-handles service
+            # Detect Chrome version to avoid the "only supports version XXX" error on Render
+            main_v = 146  # Fallback to local 146 if detection fails
+            try:
+                binary = chrome_options.binary_location
+                if binary:
+                    if os.name == 'nt':
+                        escaped_binary = binary.replace('\\', '\\\\')
+                        v_out = os.popen(f'wmic datafile where name="{escaped_binary}" get Version /value').read()
+                        match = re.search(r'Version=(\d+)', v_out)
+                    else:
+                        import subprocess
+                        v_out = subprocess.check_output([binary, '--version'], stderr=subprocess.STDOUT).decode()
+                        match = re.search(r'Chrome\s+(\d+)', v_out)
+                    
+                    if match:
+                        main_v = int(match.group(1))
+                        logger.info(f"Detected Chrome version: {main_v}")
+            except Exception as v_err:
+                logger.warning(f"Failed to detect Chrome version: {v_err}")
+
+            # uc.Chrome version_main param forces the correct driver version
+            driver = uc.Chrome(options=chrome_options, version_main=main_v)
             
             # POST-LAUNCH STEALTH (after uc patches)
             driver.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
@@ -260,10 +282,19 @@ class BaseScraper(ABC):
         print(f"🔍 [SearchFallback] {job_title} @ {company}")
         
         domain = self.get_domain(url)
-        queries = [
+        
+        # Extract job ID from URL for precise matching
+        job_id_match = re.search(r'-(\d{10,15})(?:\?|$|/)', url.rstrip('/') + '/')
+        job_id = job_id_match.group(1) if job_id_match else ''
+        
+        # Build precise queries — use job_id when available for exact match
+        queries = []
+        if job_id:
+            queries.append(f'site:{domain} "{job_id}"')
+        queries.extend([
+            f'site:{domain} "{company}" "{job_title}" job description',
             f'site:{domain} {job_title} {company}',
-            f'{job_title} {company} {domain} job description'
-        ]
+        ])
         
         search_engine_templates = [
             "https://html.duckduckgo.com/html/?q={}",
@@ -325,15 +356,18 @@ class BaseScraper(ABC):
                                     text = snippet_elem.get_text().strip()
                                     if len(text) < 60: continue
                                     
-                                    # Filter out generic SEO meta-descriptions
+                                    # Filter out generic SEO meta-descriptions and unrelated articles
                                     generic_patterns = ["job description for", "apply now", "hiring for", "view details", "posted by"]
+                                    noise_patterns = ["explore top careers", "learn ai job", "top jobs", "career guide", "career opportunities in", "salary & how to"]
                                     is_generic = sum(1 for p in generic_patterns if p in text.lower()) >= 2
+                                    is_noise = any(p in text.lower() for p in noise_patterns)
                                     
                                     # Score the snippet
                                     priority_keywords = ["responsibilities", "requirements", "skills", "experience", "role", "looking for"]
                                     score = sum(2 for k in priority_keywords if k in text.lower())
                                     score += len(text) / 100
                                     if is_generic: score -= 5
+                                    if is_noise: score -= 10  # Strongly penalize career articles
                                     
                                     if not best_snippet or score > best_snippet['score']:
                                         best_snippet = {'text': text, 'score': score}
