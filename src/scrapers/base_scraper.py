@@ -140,12 +140,47 @@ class BaseScraper(ABC):
 
     
     def extract_domain_from_url(self, url):
-        """Extract domain from URL"""
+        """Extract domain from URL (filtering out known job portals)."""
+        if not url: return ""
         try:
+            from urllib.parse import urlparse
             parsed = urlparse(url)
-            return parsed.netloc
+            domain = parsed.netloc.lower()
+            
+            # Remove "www." prefix
+            if domain.startswith('www.'):
+                domain = domain[4:]
+            
+            # Portal Blacklist (to prevent indeed.com from being shown as company domain)
+            portal_blacklist = [
+                'indeed.com', 'naukri.com', 'linkedin.com', 'internshala.com',
+                'google.com', 'facebook.com', 'twitter.com', 'instagram.com',
+                'scrape.do', 'glassdoor.com', 'monster.com', 'careerbuilder.com',
+                'ziprecruiter.com'
+            ]
+            
+            # Check if domain or any of its parent domains are in the blacklist
+            for portal in portal_blacklist:
+                if domain == portal or domain.endswith('.' + portal):
+                    return ""
+                
+            return domain
         except:
             return ""
+
+    def extract_domain_from_text(self, text):
+        """Check if a string (like a company name) contains a domain pattern."""
+        if not text: return ""
+        import re
+        # Look for patterns like "Company.com" or "Company.in"
+        pattern = r'\b([a-zA-Z0-9-][a-zA-Z0-9.-]*\.(?:com|in|org|net|io|co|ai|biz|info|sh|uk|ca|us))\b'
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            potential_domain = match.group(1).lower()
+            # Double check it's not a version number or portal
+            if not re.match(r'^\d', potential_domain): # Don't match "2.1"
+                return self.extract_domain_from_url(f"http://{potential_domain}")
+        return ""
     
     @abstractmethod
     def scrape(self, url):

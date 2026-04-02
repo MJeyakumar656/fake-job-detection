@@ -164,13 +164,16 @@ class IndeedScraper(BaseScraper):
         raise Exception("Mobile API not accessible")
 
     def _parse_mobile_api(self, data, url):
-        """Parse Indeed mobile API JSON response."""
+        """Parse Indeed mobile API JSON response and extract smart domain."""
         job_data = self._empty_result(url)
 
         if 'jobTitle' in data:
             job_data['title'] = data['jobTitle']
         if 'companyInfo' in data and 'companyName' in data['companyInfo']:
             job_data['company'] = data['companyInfo']['companyName']
+            # Smart extraction from name (e.g. "Google.com")
+            job_data['company_domain'] = self.extract_domain_from_text(job_data['company'])
+            
         if 'jobDescriptionText' in data:
             job_data['description'] = BeautifulSoup(
                 data['jobDescriptionText'], "html.parser"
@@ -297,6 +300,11 @@ class IndeedScraper(BaseScraper):
             )
             if comp_elem:
                 job_data['company'] = comp_elem.get_text().strip()
+
+        # --- Smart Domain Recovery ---
+        if not job_data.get('company_domain'):
+            # Try extracting from company name string (e.g. "Amazon.com")
+            job_data['company_domain'] = self.extract_domain_from_text(job_data['company'])
 
         if job_data['location'] == 'Not Specified':
             loc_elem = (

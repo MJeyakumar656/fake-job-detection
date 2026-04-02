@@ -252,6 +252,10 @@ class NaukriScraper(BaseScraper):
         else:
             job_data['company'] = jd.get('companyName', 'Unknown Company')
 
+        # Smart Domain Recovery from Company Name
+        if not job_data.get('company_domain'):
+            job_data['company_domain'] = self.extract_domain_from_text(job_data['company'])
+
         # Location
         loc = jd.get('jobLocation', {})
         if isinstance(loc, dict):
@@ -461,6 +465,10 @@ class NaukriScraper(BaseScraper):
                 if elem and elem.get_text().strip():
                     job_data['company'] = elem.get_text().strip()
                     break
+        
+        # Smart Domain Recovery from Company Name
+        if not job_data.get('company_domain'):
+            job_data['company_domain'] = self.extract_domain_from_text(job_data['company'])
 
         if job_data['description'] == 'No description available':
             desc_selectors = [
